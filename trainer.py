@@ -69,7 +69,6 @@ class TradingEnv:
         self.index = 30
         self.capital = self.initial_capital
 
-        # 防呆：若資料不足則回傳空狀態並略過訓練
         if self.data is None or len(self.data) < 40:
             print("❌ 無法載入足夠的資料，跳過本次訓練。")
             return np.zeros(9)
@@ -90,6 +89,25 @@ class TradingEnv:
             (row['bb_lower'] - row['close']) / row['close']
         ])
         return state
+
+    def step(self, action, leverage=1):
+        current = self.data.iloc[self.index]
+        next_price = self.data.iloc[self.index + 1]['close']
+        now_price = current['close']
+        change = (next_price - now_price) / now_price
+        tx_cost = 0.001 * leverage
+
+        reward = 0
+        if action == 1:
+            reward = (change - tx_cost) * leverage
+        elif action == 2:
+            reward = (-change - tx_cost) * leverage
+
+        reward = np.clip(reward, -1, 1)
+        self.capital *= (1 + reward)
+        self.index += 1
+        done = self.index >= len(self.data) - 2 or self.capital < 10
+        return self._get_state(), reward, done
 
 # 🧠 PPO 策略模型
 class PPOPolicy(nn.Module):
