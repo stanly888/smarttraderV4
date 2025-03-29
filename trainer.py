@@ -1,4 +1,4 @@
-# ✅ PPO 強化學習策略 AI：進階升級（含資金管理、勝率監控）
+# ✅ PPO 強化學習策略 AI：每日總結推播升級
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
-from deploy.telegram_push import send_strategy_signal
+from deploy.telegram_push import send_strategy_signal, send_daily_summary
 from eval.logbook import log_strategy
 import random
 import time
@@ -16,7 +16,7 @@ import ccxt
 
 os.makedirs("eval", exist_ok=True)
 
-# ⛏️ 改為 OKX 資料抓取模組
+# OKX 資料抓取模組
 def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
     exchange = ccxt.okx({
         'enableRateLimit': True,
@@ -28,7 +28,7 @@ def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
     df.set_index("timestamp", inplace=True)
     return df
 
-# 🔧 技術指標模組（簡化整合）
+# 技術指標模組
 def add_indicators(df):
     df['ma5'] = df['close'].rolling(window=5).mean()
     df['ma10'] = df['close'].rolling(window=10).mean()
@@ -41,7 +41,7 @@ def add_indicators(df):
     df['bb_lower'] = df['close'].rolling(20).mean() - 2 * df['close'].rolling(20).std()
     return df
 
-# 📦 強化交易環境
+# 強化交易環境
 class TradingEnv:
     def __init__(self, symbol='BTC/USDT', timeframe='15m', mode='backtest'):
         self.symbol = symbol
@@ -69,7 +69,6 @@ class TradingEnv:
                     print(f"Error fetching live data: {e}")
                     time.sleep(5)
             else:
-                print("Falling back to empty data")
                 self.data = pd.DataFrame()
         self.index = 30
         self.capital = self.initial_capital
@@ -103,12 +102,10 @@ class TradingEnv:
         current = self.data.iloc[self.index]
         next_price = self.data.iloc[self.index + 1]['close']
         now_price = current['close']
-        atr = current['atr']
         change = (next_price - now_price) / now_price
 
         leverage = 5
-        risk_fraction = 0.5 if self.loss_streak >= 2 else 1.0  # 動態倉位調整
-        trade_capital = self.capital * risk_fraction
+        risk_fraction = 0.5 if self.loss_streak >= 2 else 1.0
         tx_cost = 0.001 * leverage
 
         reward = 0
@@ -136,4 +133,4 @@ class TradingEnv:
         done = self.index >= len(self.data) - 2 or self.capital < 10
         return self._get_state(), reward, done
 
-# 其餘 PPO 訓練邏輯保持一致（略）...
+# 其他訓練與推播邏輯不變（略）
