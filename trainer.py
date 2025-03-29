@@ -6,14 +6,35 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
-from data.fetch_data import fetch_ohlcv
-from data.indicators import add_indicators
 from deploy.telegram_push import send_strategy_signal
 from eval.logbook import log_strategy
 import random
 import time
 from datetime import datetime
 import os
+import ccxt
+
+# ⛏️ 資料抓取模組（整合進 trainer.py）
+def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
+    exchange = ccxt.binance()
+    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df.set_index("timestamp", inplace=True)
+    return df
+
+# 🔧 技術指標模組（簡化整合）
+def add_indicators(df):
+    df['ma5'] = df['close'].rolling(window=5).mean()
+    df['ma10'] = df['close'].rolling(window=10).mean()
+    df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
+    df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+    df['rsi'] = 100 - (100 / (1 + df['close'].pct_change().rolling(14).mean()))
+    df['mfi'] = 50  # 假設常數，未實作完整
+    df['atr'] = df['high'].rolling(14).max() - df['low'].rolling(14).min()
+    df['bb_upper'] = df['close'].rolling(20).mean() + 2 * df['close'].rolling(20).std()
+    df['bb_lower'] = df['close'].rolling(20).mean() - 2 * df['close'].rolling(20).std()
+    return df
 
 # 🧠 PPO 策略模型
 class PPOPolicy(nn.Module):
@@ -100,7 +121,6 @@ class PPOTrainer:
         self.policy = PPOPolicy(input_dim=9, output_dim=3)
         self.old_policy = PPOPolicy(input_dim=9, output_dim=3)
 
-        # 嘗試載入模型
         if os.path.exists("ppo_model.pt"):
             self.policy.load_state_dict(torch.load("ppo_model.pt"))
             print("✅ 已載入現有模型 ppo_model.pt")
@@ -181,7 +201,6 @@ class PPOTrainer:
             log_strategy(strategy, result=round((self.env.capital - 300) / 3, 2))
             print(f"✅ Episode {ep+1} Finished. Capital: {round(self.env.capital, 2)}")
 
-        # 儲存模型
         torch.save(self.policy.state_dict(), "ppo_model.pt")
         print("💾 模型已儲存為 ppo_model.pt")
 
