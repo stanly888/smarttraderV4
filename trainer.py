@@ -87,17 +87,39 @@ class PPOTrainer:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            direction = ['觀望', '做多', '做空'][actions[-1]]
-            strategy = {
-                'symbol': self.symbol,
-                'direction': direction,
-                'reason': f'AI PPO 策略（{self.env.mode} 模式）',
-                'leverage': 10,
-                'confidence': 90,
-                'tp': 4.5,
-                'sl': 1.5,
-                'model': 'PPO_Strategy'
-            }
-            send_strategy_signal(strategy)
-            log_strategy(strategy, result=round((self.env.capital - 300) / 3, 2))
-            print(f"✅ Episode {ep+1} Finished. Capital: {round(self.env.capital, 2)}")
+           final_action = actions[-1]
+direction = ['觀望', '做多', '做空'][final_action]
+
+# ✅ 信心分數：使用模型輸出的機率
+with torch.no_grad():
+    probs = self.policy(torch.FloatTensor(state))
+confidence = round(float(probs[final_action].item()) * 100, 2)
+
+# ✅ TP / SL 動態調整
+tp = round(2 + confidence * 0.03, 2)
+sl = round(tp / 3, 2)
+
+# ✅ 槓桿根據信心分數調整
+if confidence > 90:
+    leverage = 20
+elif confidence > 70:
+    leverage = 10
+else:
+    leverage = 5
+
+# ✅ 組合策略訊息
+strategy = {
+    'symbol': self.symbol,
+    'direction': direction,
+    'reason': f'AI PPO 策略（{self.env.mode} 模式）',
+    'leverage': leverage,
+    'confidence': confidence,
+    'tp': tp,
+    'sl': sl,
+    'model': 'PPO_Strategy'
+}
+
+send_strategy_signal(strategy)
+log_strategy(strategy, result=round((self.env.capital - 300) / 3, 2))
+print(f"✅ Episode {ep+1} Finished. Capital: {round(self.env.capital, 2)}")
+
