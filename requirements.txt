@@ -1,2 +1,5 @@
 torch
-requests
+numpy
+pandas
+torch
+ccxt
