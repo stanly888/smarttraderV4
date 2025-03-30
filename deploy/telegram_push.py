@@ -1,7 +1,7 @@
 import requests
 
-TELEGRAM_TOKEN = "7910051513:AAG7erXokBDz8S5RTChtBuX0PHY69zd0y8o"
-TELEGRAM_CHAT_ID = "6579673198"
+TELEGRAM_TOKEN = "你的 Telegram Bot Token"
+TELEGRAM_CHAT_ID = "你的 Chat ID"
 
 def send_strategy_signal(strategy):
     message = (
@@ -13,11 +13,5 @@ def send_strategy_signal(strategy):
         f"TP：{strategy['tp']}% / SL：{strategy['sl']}%"
     )
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message
-    }
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"❌ Telegram 推播失敗：{e}")
+    requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
+
