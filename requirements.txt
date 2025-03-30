@@ -1,2 +1,6 @@
+numpy
+pandas
 torch
-requests
+ccxt
+python-telegram-bot
+
