@@ -1,7 +1,4 @@
-torch
 pandas
-requests
-python-telegram-bot
+torch
 ccxt
-ta
-PyYAML
+python-telegram-bot

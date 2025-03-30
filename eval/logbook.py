@@ -1,18 +1,3 @@
-import csv
-from datetime import datetime
-
-def log_strategy(strategy: dict, result: float):
-    with open("eval/strategy_log.csv", "a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            datetime.now().strftime("%Y-%m-%d %H:%M"),
-            strategy["symbol"],
-            strategy["direction"],
-            strategy["confidence"],
-            strategy["leverage"],
-            strategy["tp"],
-            strategy["sl"],
-            strategy["model"],
-            strategy["reason"],
-            result
-        ])
+# 模擬紀錄模組
+def log_strategy(strategy, result):
+    print(f"紀錄策略: {strategy}, 結果: {result}")
