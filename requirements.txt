@@ -1,2 +1,9 @@
 torch
+ta
+pandas
+numpy
+PyYAML
+requests
+python-telegram-bot
+ccxttorch
 requests
