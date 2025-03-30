@@ -1,4 +1,4 @@
-from src.trainer import PPOTrainer
+from trainer import PPOTrainer
 from datetime import datetime
 
 def get_mode():
