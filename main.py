@@ -7,7 +7,6 @@ from src.utils import fetch_real_data, get_random_historical_data
 def load_config():
     with open("config/config.json", "r") as f:
         config = json.load(f)
-    # Use environment variables to override
     keys = ["binance_api_key", "binance_api_secret", "telegram_bot_token", "telegram_chat_id"]
     for key in keys:
         if os.getenv(key):
