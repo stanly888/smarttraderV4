@@ -1,1 +1,1 @@
-# notifications.py (real code goes here)
+# notifications.py placeholder

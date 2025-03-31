@@ -1,1 +1,1 @@
-# trainer.py (real code goes here)
+# trainer.py placeholder

@@ -1,2 +1,2 @@
-# SmartTrader V5
-已整合所有功能並修正結構，可直接部署。
+# SmartTrader V5 (main.py 已移至 src/)
+可直接部署到 Render。
