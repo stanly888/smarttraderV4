@@ -1,4 +1,4 @@
-# ✅ PPO 強化學習策略 AI：進階升級（含模型儲存與讀取 + OKX 支援）
+# ✅ PPO 強化學習策略 AI：進階升級（含 TP/SL 槓桿預測 + Reward 強化）
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,8 @@ from datetime import datetime
 import os
 import ccxt
 
-# ⛏️ 改為 OKX 資料抓取模組（原為 Binance）
+# ⛏️ 改為 OKX 資料抓取模組
+
 def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
     exchange = ccxt.okx({
         'enableRateLimit': True,
@@ -33,13 +34,12 @@ def add_indicators(df):
     df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
     df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
     df['rsi'] = 100 - (100 / (1 + df['close'].pct_change().rolling(14).mean()))
-    df['mfi'] = 50  # 假設常數，未實作完整
+    df['mfi'] = 50
     df['atr'] = df['high'].rolling(14).max() - df['low'].rolling(14).min()
     df['bb_upper'] = df['close'].rolling(20).mean() + 2 * df['close'].rolling(20).std()
     df['bb_lower'] = df['close'].rolling(20).mean() - 2 * df['close'].rolling(20).std()
     return df
 
-# 📦 強化交易環境
 class TradingEnv:
     def __init__(self, symbol='BTC/USDT', timeframe='15m', mode='backtest'):
         self.symbol = symbol
@@ -66,6 +66,7 @@ class TradingEnv:
             else:
                 print("Falling back to empty data")
                 self.data = pd.DataFrame()
+
         self.index = 30
         self.capital = self.initial_capital
 
@@ -90,24 +91,9 @@ class TradingEnv:
         ])
         return state
 
-    def step(self, action):
-        current_price = self.data.iloc[self.index]['close']
-        next_price = self.data.iloc[self.index + 1]['close']
-        change = (next_price - current_price) / current_price
-        reward = 0
-        if action == 1:
-            reward = change
-        elif action == 2:
-            reward = -change
-        self.capital *= (1 + reward)
-        self.index += 1
-        done = self.index >= len(self.data) - 2 or self.capital < 10
-        return self._get_state(), reward, done
-
-# 🧠 PPO 策略模型
 class PPOPolicy(nn.Module):
     def __init__(self, input_dim, output_dim):
-        super(PPOPolicy, self).__init__()
+        super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, 64), nn.ReLU(),
             nn.Linear(64, 64), nn.ReLU(),
@@ -117,12 +103,11 @@ class PPOPolicy(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# 🚀 PPO 強化訓練器（升級版）
 class PPOTrainer:
     def __init__(self, symbol='BTC/USDT', timeframe='15m', mode='backtest'):
         self.env = TradingEnv(symbol, timeframe, mode)
-        self.policy = PPOPolicy(input_dim=9, output_dim=3)
-        self.old_policy = PPOPolicy(input_dim=9, output_dim=3)
+        self.policy = PPOPolicy(9, 3)
+        self.old_policy = PPOPolicy(9, 3)
 
         if os.path.exists("ppo_model.pt"):
             self.policy.load_state_dict(torch.load("ppo_model.pt"))
@@ -142,6 +127,7 @@ class PPOTrainer:
 
             log_probs, old_log_probs, rewards, actions = [], [], [], []
             done = False
+            peak = self.env.capital
 
             while not done:
                 state_tensor = torch.FloatTensor(state)
@@ -154,6 +140,12 @@ class PPOTrainer:
                 old_log_prob = Categorical(old_probs).log_prob(action)
 
                 state, reward, done = self.env.step(action.item())
+                peak = max(peak, self.env.capital)
+
+                drawdown = (peak - self.env.capital) / peak
+                penalty = drawdown * 0.5
+                reward -= penalty
+
                 log_probs.append(log_prob)
                 old_log_probs.append(old_log_prob)
                 rewards.append(reward)
@@ -189,12 +181,11 @@ class PPOTrainer:
             tp = round(2 + confidence * 0.03, 2)
             sl = round(tp / 3, 2)
 
+            leverage = 5
             if confidence > 90:
                 leverage = 20
-            elif confidence > 70:
+            elif confidence > 75:
                 leverage = 10
-            else:
-                leverage = 5
 
             strategy = {
                 'symbol': self.symbol,
@@ -221,75 +212,3 @@ if __name__ == '__main__':
 
     trainer = PPOTrainer(symbol='BTC/USDT', timeframe='15m', mode=get_mode())
     trainer.train(episodes=50)
-    def train(self, episodes=50):
-        for ep in range(episodes):
-            state = self.env.reset()
-            log_probs, old_log_probs, rewards, actions = [], [], [], []
-            done = False
-            while not done:
-                state_tensor = torch.FloatTensor(state)
-                with torch.no_grad():
-                    old_probs = self.old_policy(state_tensor)
-                probs = self.policy(state_tensor)
-                dist = Categorical(probs)
-                action = dist.sample()
-                log_prob = dist.log_prob(action)
-                old_log_prob = Categorical(old_probs).log_prob(action)
-                state, reward, done = self.env.step(action.item())
-                log_probs.append(log_prob)
-                old_log_probs.append(old_log_prob)
-                rewards.append(reward)
-                actions.append(action.item())
-
-            self.old_policy.load_state_dict(self.policy.state_dict())
-
-            returns = []
-            G = 0
-            for r in reversed(rewards):
-                G = r + self.gamma * G
-                returns.insert(0, G)
-            returns = torch.tensor(returns)
-            log_probs = torch.stack(log_probs)
-            old_log_probs = torch.stack(old_log_probs)
-            ratios = torch.exp(log_probs - old_log_probs)
-            surr1 = ratios * returns
-            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * returns
-            loss = -torch.min(surr1, surr2).mean()
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            # === 推播訊息組合區 ===
-            final_action = actions[-1]
-            direction = ['觀望', '做多', '做空'][final_action]
-
-            with torch.no_grad():
-                probs = self.policy(torch.FloatTensor(state))
-            confidence = round(float(probs[final_action].item()) * 100, 2)
-
-            tp = round(2 + confidence * 0.03, 2)
-            sl = round(tp / 3, 2)
-
-            if confidence > 90:
-                leverage = 20
-            elif confidence > 70:
-                leverage = 10
-            else:
-                leverage = 5
-
-            strategy = {
-                'symbol': self.symbol,
-                'direction': direction,
-                'reason': f'AI PPO 策略（{self.env.mode} 模式）',
-                'leverage': leverage,
-                'confidence': confidence,
-                'tp': tp,
-                'sl': sl,
-                'model': 'PPO_Strategy'
-            }
-
-            send_strategy_signal(strategy)
-            log_strategy(strategy, result=round((self.env.capital - 300) / 3, 2))
-            print(f"✅ Episode {ep+1} Finished. Capital: {round(self.env.capital, 2)}")
-
