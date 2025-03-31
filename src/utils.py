@@ -1,1 +1,1 @@
-<full utils.py code>
+<完整 utils.py 程式碼 - 含 Binance API 與歷史資料處理>
