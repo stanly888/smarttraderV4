@@ -1,4 +1,4 @@
-# ✅ PPO 強化學習策略 AI：進階升級（含 TP/SL 槓桿預測 + Reward 強化）
+# ✅ PPO 強化學習策略 AI：最終優化版（含 TP/SL 槓桿預測 + Reward 強化 + 指標修正）
 
 import numpy as np
 import pandas as pd
@@ -14,8 +14,6 @@ from datetime import datetime
 import os
 import ccxt
 
-# ⛏️ 改為 OKX 資料抓取模組
-
 def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
     exchange = ccxt.okx({
         'enableRateLimit': True,
@@ -27,14 +25,28 @@ def fetch_ohlcv(symbol='BTC/USDT', timeframe='15m', limit=200):
     df.set_index("timestamp", inplace=True)
     return df
 
-# 🔧 技術指標模組（簡化整合）
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def calculate_mfi(df, period=14):
+    tp = (df['high'] + df['low'] + df['close']) / 3
+    mf = tp * df['volume']
+    pos_mf = mf.where(tp.diff() > 0, 0).rolling(window=period).sum()
+    neg_mf = mf.where(tp.diff() < 0, 0).rolling(window=period).sum()
+    mfr = pos_mf / neg_mf
+    return 100 - (100 / (1 + mfr))
+
 def add_indicators(df):
     df['ma5'] = df['close'].rolling(window=5).mean()
     df['ma10'] = df['close'].rolling(window=10).mean()
     df['vwap'] = (df['close'] * df['volume']).cumsum() / df['volume'].cumsum()
     df['obv'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
-    df['rsi'] = 100 - (100 / (1 + df['close'].pct_change().rolling(14).mean()))
-    df['mfi'] = 50
+    df['rsi'] = calculate_rsi(df['close'])
+    df['mfi'] = calculate_mfi(df)
     df['atr'] = df['high'].rolling(14).max() - df['low'].rolling(14).min()
     df['bb_upper'] = df['close'].rolling(20).mean() + 2 * df['close'].rolling(20).std()
     df['bb_lower'] = df['close'].rolling(20).mean() - 2 * df['close'].rolling(20).std()
@@ -49,9 +61,8 @@ class TradingEnv:
         self.capital = self.initial_capital
         self.index = 30
 
-        if mode == 'live':
-            self.data = None
-        else:
+        self.data = None
+        if mode != 'live':
             self.data = add_indicators(fetch_ohlcv(symbol, timeframe, 200))
 
     def reset(self):
@@ -78,7 +89,7 @@ class TradingEnv:
 
     def _get_state(self):
         row = self.data.iloc[self.index]
-        state = np.array([
+        return np.array([
             row['ma5'] / row['close'] - 1,
             row['ma10'] / row['close'] - 1,
             row['obv'] / self.data['obv'].std(),
@@ -89,7 +100,27 @@ class TradingEnv:
             (row['bb_upper'] - row['close']) / row['close'],
             (row['bb_lower'] - row['close']) / row['close']
         ])
-        return state
+
+    def step(self, action):
+        self.index += 1
+        done = self.index >= len(self.data) - 1
+        if done:
+            return self._get_state(), 0, True
+
+        current = self.data.iloc[self.index]
+        previous = self.data.iloc[self.index - 1]
+        change = (current['close'] - previous['close']) / previous['close']
+        reward = 0
+
+        if action == 1:  # 做多
+            reward = change * 100
+            self.capital *= (1 + change)
+        elif action == 2:  # 做空
+            reward = -change * 100
+            self.capital *= (1 - change)
+
+        reward = np.clip(reward, -1, 1)
+        return self._get_state(), reward, done
 
 class PPOPolicy(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -141,10 +172,8 @@ class PPOTrainer:
 
                 state, reward, done = self.env.step(action.item())
                 peak = max(peak, self.env.capital)
-
                 drawdown = (peak - self.env.capital) / peak
-                penalty = drawdown * 0.5
-                reward -= penalty
+                reward -= drawdown * 0.5
 
                 log_probs.append(log_prob)
                 old_log_probs.append(old_log_prob)
@@ -152,7 +181,6 @@ class PPOTrainer:
                 actions.append(action.item())
 
             self.old_policy.load_state_dict(self.policy.state_dict())
-
             returns = []
             G = 0
             for r in reversed(rewards):
@@ -177,7 +205,6 @@ class PPOTrainer:
             with torch.no_grad():
                 probs = self.policy(torch.FloatTensor(state))
             confidence = round(float(probs[final_action].item()) * 100, 2)
-
             tp = round(2 + confidence * 0.03, 2)
             sl = round(tp / 3, 2)
 
@@ -197,7 +224,6 @@ class PPOTrainer:
                 'sl': sl,
                 'model': 'PPO_Strategy'
             }
-
             send_strategy_signal(strategy)
             log_strategy(strategy, result=round((self.env.capital - 300) / 3, 2))
             print(f"✅ Episode {ep+1} Finished. Capital: {round(self.env.capital, 2)}")
