@@ -1,8 +1,4 @@
-torch==2.1.0
-ta
+torch
+numpy
 pandas
-numpy==1.23.5
-PyYAML
-requests
-python-telegram-bot
 ccxt
