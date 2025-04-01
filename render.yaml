@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: smarttrader-v7
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.9"
+      - key: binance_api_key
+        value: "your_api_key"
+      - key: binance_api_secret
+        value: "your_api_secret"
+      - key: telegram_bot_token
+        value: "7910051513:AAG7erXokBDz8S5RTChtBuX0PHY69zd0y8o"
+      - key: telegram_chat_id
+        value: "6579673198"
