@@ -1,0 +1,1 @@
+# Simulated trade execution with TP/SL
