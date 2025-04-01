@@ -1,6 +1,4 @@
 torch
 numpy
 matplotlib
-python-binance
 requests
-pandas
