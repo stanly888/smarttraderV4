@@ -1,0 +1,19 @@
+
+services:
+  - type: background
+    name: smarttrader-v13
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python src/loop.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.9"
+      - key: binance_api_key
+        value: "your_api_key"
+      - key: binance_api_secret
+        value: "your_api_secret"
+      - key: telegram_bot_token
+        value: "your_telegram_bot_token"
+      - key: telegram_chat_id
+        value: "your_telegram_chat_id"
