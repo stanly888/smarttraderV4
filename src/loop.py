@@ -4,9 +4,11 @@ import json
 import time
 import traceback
 from datetime import datetime
-from src.multi_trainer import MultiStrategyTrainer
-from src.utils import fetch_real_data
-from src.logger import log_strategy_summary
+
+from multi_trainer import MultiStrategyTrainer
+from utils import fetch_real_data
+from logger import log_strategy_summary
+from notifications import send_strategy_signal
 
 def load_config():
     with open("config/config.json", "r") as f:
