@@ -1,1 +1,1 @@
-# notifications.py placeholder with upgrade hooks
+# notifications.py ready

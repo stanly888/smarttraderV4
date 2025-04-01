@@ -1,1 +1,1 @@
-# trainer.py placeholder with upgrade hooks
+# trainer.py ready

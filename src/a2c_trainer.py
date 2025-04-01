@@ -1,1 +1,1 @@
-# a2c_trainer.py placeholder with upgrade hooks
+# a2c_trainer.py ready

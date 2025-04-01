@@ -1,1 +1,1 @@
-# model_loader.py placeholder with upgrade hooks
+# model_loader.py ready

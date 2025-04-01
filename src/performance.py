@@ -1,1 +1,1 @@
-# performance.py placeholder with upgrade hooks
+# performance.py ready
