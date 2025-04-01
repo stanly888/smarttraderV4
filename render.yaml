@@ -8,6 +8,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.9"
+      - key: PYTHONPATH
+        value: "."
       - key: binance_api_key
         value: "your_api_key"
       - key: binance_api_secret
@@ -16,3 +18,4 @@ services:
         value: "7910051513:AAG7erXokBDz8S5RTChtBuX0PHY69zd0y8o"
       - key: telegram_chat_id
         value: "6579673198"
+
