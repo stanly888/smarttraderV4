@@ -7,8 +7,8 @@
   "lr_tp_sl": 0.001,
   "max_drawdown": 0.2,
   "batch_size": 10,
-  "telegram_bot_token": "7910051513:AAG7erXokBDz8S5RTChtBuX0PHY69zd0y8o",
-  "telegram_chat_id": "6579673198",
-  "binance_api_key": "BI2zo8dU3XvThQv1JI8ZzDucyYNj0HDGhhvaR2174DXHulR9oaUrUGKB4OgcwigW",
-  "binance_api_secret": "3IWXYYRIFJYaXiOTm3toKJKVgm2vKTPVNOh7YAHydZqYVu9xAiRIzcTfV6QBUF7N"
+  "telegram_bot_token": "your_bot_token",
+  "telegram_chat_id": "your_chat_id",
+  "binance_api_key": "your_binance_key",
+  "binance_api_secret": "your_binance_secret"
 }
