@@ -1,11 +1,10 @@
 
 import torch
 from torch.distributions import Categorical
-from src.models import PPOPolicy, TP_SL_Model
-from src.env import TradingEnv
-from src.notifications import send_strategy_signal
+from models import PPOPolicy, TP_SL_Model
+from env import TradingEnv
+from notifications import send_strategy_signal
 from datetime import datetime
-
 class MultiStrategyTrainer:
     def __init__(self, config):
         self.config = config
