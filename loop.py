@@ -1,0 +1,1 @@
+print('SmartTrader Background Worker Running')
