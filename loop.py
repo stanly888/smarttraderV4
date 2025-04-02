@@ -5,7 +5,7 @@ import time
 import traceback
 from datetime import datetime
 from src.multi_trainer import MultiStrategyTrainer
-from src.utils import fetch_real_data, load_config
+from src.utils import load_config, fetch_real_data
 from src.logger import log_strategy_summary
 
 INTERVAL_MINUTES = 30
