@@ -1,31 +1,51 @@
-print('SmartTrader Background Worker Running')
-# loop.py
-import os
 import time
-import traceback
-from datetime import datetime
-from src.multi_trainer import MultiStrategyTrainer
 from src.utils import load_config, fetch_real_data
-from src.logger import log_strategy_summary
+from src.models import train_model, save_model, load_model_if_exists
+from src.logger import log_metrics
+from src.notifications import send_telegram_message
+from src.env import TradingEnv
 
-INTERVAL_MINUTES = 30
+print("SmartTrader Background Worker Running...")
 
-while True:
+try:
+    # === 載入設定 ===
+    config = load_config()
+    mode = "live"  # or "backtest"
+
+    # === 載入歷史資料 ===
+    candles = fetch_real_data(config, mode=mode)
+
+    if not candles or len(candles) < 50:
+        raise ValueError("歷史 K 線資料不足，無法訓練")
+
+    # === 建立交易環境 ===
+    env = TradingEnv(candles)
+
+    # === 載入舊模型（如果有）===
+    model = load_model_if_exists()
+
+    # === 開始訓練 ===
+    result = train_model(env, model=model, episodes=30)
+
+    # === 儲存模型 ===
+    save_model(result["model"])
+
+    # === 記錄訓練數據到 logbook ===
+    log_metrics(result)
+
+    # === 發送 Telegram 推播 ===
+    message = (
+        f"✅ SmartTrader V16 訓練完成\n"
+        f"模式：{mode}\n"
+        f"資金報酬：{result['capital']:.2f}\n"
+        f"勝率：{result['win_rate']:.2f}%\n"
+        f"信心分數：{result['confidence']:.2f}"
+    )
+    send_telegram_message(config, message)
+
+except Exception as e:
+    print("❌ 執行失敗：", e)
     try:
-        print(f"[{datetime.now()}] Starting training loop...")
-
-        config = load_config()
-        mode = "live" if 8 <= datetime.now().hour < 20 else "backtest"
-        close, high, low, volume = fetch_real_data(config, mode=mode)
-
-        trainer = MultiStrategyTrainer(config)
-        trainer.train_all(close, high, low, volume, mode=mode)
-
-        log_strategy_summary()
-        print(f"[{datetime.now()}] Training loop complete. Sleeping {INTERVAL_MINUTES} min...\n")
-
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        traceback.print_exc()
-
-    time.sleep(INTERVAL_MINUTES * 60)
+        send_telegram_message(config, f"❌ SmartTrader 執行錯誤：{str(e)}")
+    except:
+        pass
