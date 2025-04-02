@@ -1,0 +1,10 @@
+services:
+  - type: worker
+    name: smarttrader-v16
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python src/loop.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.9"

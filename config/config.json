@@ -1,0 +1,12 @@
+{
+  "initial_capital": 300,
+  "episodes": 50,
+  "gamma": 0.99,
+  "eps_clip": 0.2,
+  "lr_policy": 0.001,
+  "lr_tp_sl": 0.001,
+  "max_drawdown": 0.2,
+  "batch_size": 10,
+  "telegram_bot_token": "your_bot_token",
+  "telegram_chat_id": "your_chat_id"
+}

@@ -1,2 +1,3 @@
-# SmartTrader V5
-✅ main.py 移至根目錄，已符合 Render 路徑設定。
+# SmartTrader V16
+
+部署型 AI 策略交易機器人，支援多策略學習、自動推播與資金管理。
