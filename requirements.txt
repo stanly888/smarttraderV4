@@ -1,6 +1,0 @@
-
-torch
-numpy
-matplotlib
-requests
-python-binance
