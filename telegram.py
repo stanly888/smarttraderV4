@@ -1,6 +1,11 @@
 import requests
 import json
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+
+# 從 JSON 檔載入 Telegram Token 與 Chat ID
+with open("config.json", "r") as f:
+    config = json.load(f)
+TELEGRAM_TOKEN = config["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = config["TELEGRAM_CHAT_ID"]
 
 def send_strategy_update(result):
     message = f"""
@@ -33,3 +38,4 @@ def send_daily_report(metrics):
         "text": message
     }
     requests.post(url, data=payload)
+
