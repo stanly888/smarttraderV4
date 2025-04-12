@@ -5,3 +5,5 @@ requests
 ccxt
 ta
 matplotlib
+schedule
+pytz
