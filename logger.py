@@ -6,3 +6,7 @@ def record_result(result):
 
 def analyze_daily_log():
     return {"win_rate": 0.65, "confidence_var": 0.08, "tp_hit": 0.6, "sl_hit": 0.4, "max_drawdown": 0.03}
+
+def record_retrain_status(...)
+def get_last_signal(...)
+def record_last_signal(...)
