@@ -1,8 +1,13 @@
 import requests
 import os
 import json
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 from logger import get_last_signal, record_last_signal
+
+# ✅ 正確讀取 config.json 的方式
+with open("config.json", "r") as f:
+    config = json.load(f)
+TELEGRAM_TOKEN = config["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = config["TELEGRAM_CHAT_ID"]
 
 def send_strategy_update(result):
     last = get_last_signal()
