@@ -1,1 +1,6 @@
-# logger.py - 資金與回撤記錄
+
+import json
+
+def log_trade(result):
+    with open("logbook.json", "a") as f:
+        f.write(json.dumps(result) + "\n")

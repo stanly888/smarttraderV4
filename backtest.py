@@ -1,1 +1,3 @@
-# backtest.py - 歷史 K 線回測
+
+def run_backtest():
+    print("Running backtest on random historical data...")
