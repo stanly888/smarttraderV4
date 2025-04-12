@@ -41,7 +41,6 @@ def send_strategy_update(result):
 方向：{current['direction']}（信心：{current['confidence']:.2f}）
 槓桿：{current['leverage']}x
 TP：+{current['tp']}% / SL：-{current['sl']}%
-
 """
 
     # 發送 Telegram 訊息
@@ -55,8 +54,11 @@ TP：+{current['tp']}% / SL：-{current['sl']}%
         requests.post(url, data=payload)
     except Exception as e:
         print(f"❌ 推播錯誤: {e}")
-        def send_daily_report(metrics):
+
+# ✅ 新增每日績效報告推播功能
+def send_daily_report(metrics):
     if not metrics:
+        print("⚠️ 無法產生每日績效報告（metrics 為空）")
         return
 
     capital = metrics["final_capital"]
