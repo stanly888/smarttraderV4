@@ -41,6 +41,7 @@ def send_strategy_update(result):
 方向：{current['direction']}（信心：{current['confidence']:.2f}）
 槓桿：{current['leverage']}x
 TP：+{current['tp']}% / SL：-{current['sl']}%
+
 """
 
     # 發送 Telegram 訊息
@@ -54,3 +55,42 @@ TP：+{current['tp']}% / SL：-{current['sl']}%
         requests.post(url, data=payload)
     except Exception as e:
         print(f"❌ 推播錯誤: {e}")
+        def send_daily_report(metrics):
+    if not metrics:
+        return
+
+    capital = metrics["final_capital"]
+    win_rate = metrics["win_rate"]
+    tp_rate = metrics["tp_rate"]
+    sl_rate = metrics["sl_rate"]
+    avg_conf = metrics["avg_confidence"]
+    std_conf = metrics["std_confidence"]
+    top_model = metrics["top_model"]
+    total_trades = metrics["total_trades"]
+    suggest = metrics["recommend_v9"]
+
+    message = f"""
+📊 [SmartTrader 每日績效總結]
+
+總交易筆數：{total_trades}
+最常使用模型：{top_model}
+最終模擬資金：${capital:.2f}
+
+✅ 勝率：{win_rate*100:.1f}%
+🎯 TP 命中率：{tp_rate*100:.1f}%
+⛔ SL 命中率：{sl_rate*100:.1f}%
+🧠 信心平均：{avg_conf:.2f}（波動 ±{std_conf:.2f}）
+
+{"✅ 建議升級至 V9（開始模擬實單）" if suggest else "🔄 尚未達成升級條件，持續觀察"}
+"""
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message
+    }
+
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"❌ 每日推播錯誤: {e}")
