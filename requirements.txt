@@ -1,7 +1,0 @@
-torch
-pandas
-numpy
-ccxt
-matplotlib
-requests
-ta
