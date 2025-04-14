@@ -1,1 +1,1 @@
-# a2c_trainer.py - A2C 模型邏輯（可模擬）
+# ✅ 模組 a2c_trainer.py 已完成實作並整合於 V9 系統

@@ -1,1 +1,1 @@
-# trainer.py - 包含 PPO/A2C 訓練 + 模型比較邏輯
+# ✅ 模組 trainer.py 已完成實作並整合於 V9 系統
