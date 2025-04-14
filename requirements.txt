@@ -1,0 +1,9 @@
+torch
+pandas
+numpy
+requests
+ccxt
+ta
+matplotlib
+schedule
+pytz
