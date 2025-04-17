@@ -1,12 +1,9 @@
 import ccxt
 import pandas as pd
-import os
 
 def fetch_market_data(symbol, timeframe, limit):
     exchange = ccxt.binance({
-        'apiKey': os.getenv('binance_api_key'),
-        'secret': os.getenv('binance_api_secret'),
-        'enableRateLimit': True
+        'enableRateLimit': True  # 不要加 apiKey/secret，避免觸發限制
     })
     bars = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
     df = pd.DataFrame(bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
