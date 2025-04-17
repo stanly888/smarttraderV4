@@ -1,1 +1,4 @@
-# ✅ 模組 telegram.py 已完成實作並整合於 V9 系統
+def send_strategy_update(result):
+    print("[Telegram] 推播策略：", result)
+def send_daily_report(metrics):
+    print("[Telegram] 推播日報表：", metrics)

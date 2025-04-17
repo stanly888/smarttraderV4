@@ -1,1 +1,5 @@
-# ✅ 模組 logger.py 已完成實作並整合於 V9 系統
+import json
+
+def record_retrain_status(model_name, reward, confidence):
+    with open("retrain_status.json", "w") as f:
+        json.dump({"model": model_name, "score": reward, "confidence": confidence}, f)

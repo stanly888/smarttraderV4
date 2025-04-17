@@ -1,1 +1,5 @@
-# ✅ 模組 config.json 已完成實作並整合於 V9 系統
+{
+  "symbol": "BTC/USDT",
+  "timeframe": "15m",
+  "limit": 100
+}

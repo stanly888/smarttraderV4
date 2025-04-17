@@ -1,1 +1,5 @@
-# ✅ 模組 requirements.txt 已完成實作並整合於 V9 系統
+ccxt
+pandas
+ta
+schedule
+requests
