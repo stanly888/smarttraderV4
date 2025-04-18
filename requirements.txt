@@ -1,5 +1,9 @@
-ccxt
 pandas
-ta
-schedule
+numpy
 requests
+ccxt
+ta
+matplotlib
+schedule
+pytz
+torch
