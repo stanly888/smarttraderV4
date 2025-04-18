@@ -1,46 +1,58 @@
 # dqn_trainer.py
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
-from dqn_model import DQNModel
+from dqn_model import DQN
 
-model = DQNModel(input_dim=10)
+# 初始化模型與優化器
+model = DQN(input_dim=10)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
-gamma = 0.95
+
+# 模擬 reward 機制
+def simulate_reward(action: int) -> float:
+    """
+    模擬 reward，未來應替換為真實 TP/SL 結果
+    """
+    if action == 0:  # Long
+        return np.random.uniform(-1.0, 1.5)
+    elif action == 1:  # Short
+        return np.random.uniform(-1.0, 1.5)
+    else:  # Skip
+        return np.random.uniform(-0.1, 0.2)
+
+# 訓練次數（每次 retrain）
+TRAIN_STEPS = 20
 
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    q_values = model(x)
-    action = torch.argmax(q_values, dim=1).item()
+    total_reward = 0
 
-    # 模擬 reward
-    reward = torch.tensor([np.random.uniform(-1, 1)], dtype=torch.float32)
+    for _ in range(TRAIN_STEPS):
+        q_values = model(x)
+        action = torch.argmax(q_values, dim=-1).item()
 
-    # 模擬 next state（假設無重大改變）
-    next_q_values = model(x).detach()
-    max_next_q = next_q_values.max().item()
+        reward = simulate_reward(action)
+        total_reward += reward
 
-    target_q = reward + gamma * max_next_q
-    predicted_q = q_values[0, action]
+        target_q = q_values.clone().detach()
+        target_q[0, action] = reward  # target only更新選定動作
 
-    loss = (predicted_q - target_q).pow(2)
+        loss = F.mse_loss(q_values, target_q)
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-    direction = "Long" if action == 0 else "Short"
-    confidence = float(torch.softmax(q_values, dim=1)[0, action].item())
-    tp = round(1.5 + confidence * 2.5, 2)
-    sl = round(1.0 + (1 - confidence) * 2.0, 2)
-    leverage = int(min(10, max(1, int(confidence * 12))))
+    avg_reward = total_reward / TRAIN_STEPS
+    confidence = torch.softmax(model(x), dim=-1)[0, action].item()
 
     return {
         "model": "DQN",
-        "direction": direction,
-        "confidence": confidence,
-        "tp": tp,
-        "sl": sl,
-        "leverage": leverage,
-        "score": float(reward.item())
+        "direction": "Long" if action == 0 else "Short" if action == 1 else "Skip",
+        "confidence": round(confidence, 3),
+        "tp": round(np.random.uniform(1.0, 3.5), 2),
+        "sl": round(np.random.uniform(1.0, 2.5), 2),
+        "leverage": np.random.choice([2, 3, 5]),
+        "score": round(avg_reward, 4)
     }
