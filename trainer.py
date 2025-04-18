@@ -19,14 +19,19 @@ def train_model():
 
     try:
         if use_historical:
-            df = fetch_random_historical_data("BTCUSDT", "15", 100)  # Bybit 歷史資料
+            df = fetch_random_historical_data("BTCUSDT", "15", 100)
         else:
-            df = fetch_market_data("BTC-USDT", "15m", 100)  # BingX 實盤資料
+            df = fetch_market_data("BTC-USDT", "15m", 100)
     except Exception as e:
         print(f"❌ 無法取得 {source}：{e}")
         return {"status": "error", "message": str(e)}
 
     features = compute_features(df)
+
+    # ✅ 新增：檢查 features 是否為空或無效
+    if features is None or not features.any():
+        print("⚠️ 技術指標異常，略過此次訓練")
+        return {"status": "error", "message": "技術指標異常，無有效數據"}
 
     result_ppo = train_ppo(features)
     result_a2c = train_a2c(features)
@@ -34,7 +39,7 @@ def train_model():
 
     best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
 
-    # 防呆機制：避免推播錯誤
+    # ✅ 防呆機制：避免推播錯誤
     if "model" not in best or "confidence" not in best or "score" not in best:
         return {
             "status": "error",
