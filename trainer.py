@@ -8,8 +8,8 @@ from dqn_trainer import train_dqn
 from logger import record_retrain_status
 
 def train_model():
-    # ✅ 使用 Bybit 格式：BTCUSDT、15（分鐘）
-    df = fetch_market_data("BTCUSDT", "15", 100)
+    # ✅ 改為 BingX 格式：BTC-USDT、15m
+    df = fetch_market_data("BTC-USDT", "15m", 100)
     features = compute_features(df)
 
     result_ppo = train_ppo(features)
