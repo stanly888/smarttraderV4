@@ -2,15 +2,14 @@
 import json
 from datetime import datetime
 import os
+import numpy as np
 
 def simulate_trade_outcome(result: dict) -> float:
     """
     根據模型輸出模擬是否命中 TP / SL 並產生 reward。
     """
-    # 隨機模擬是否成功命中 TP 或 SL
     import random
-    outcome = random.choices(["tp", "sl", "none"], weights=[0.45, 0.3, 0.25])[0]  # 可調整機率
-    
+    outcome = random.choices(["tp", "sl", "none"], weights=[0.45, 0.3, 0.25])[0]
     leverage = result.get("leverage", 1)
     reward = 0.0
 
@@ -19,7 +18,17 @@ def simulate_trade_outcome(result: dict) -> float:
     elif outcome == "sl":
         reward = -result["sl"] / 100 * leverage
 
-    return round(reward, 4)
+    return round(float(reward), 4)
+
+def convert_numpy(obj):
+    """處理 numpy 型別轉換為 Python 原生型別以供 JSON 存儲。"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
 
 def log_reward_result(result: dict):
     """
@@ -46,6 +55,6 @@ def log_reward_result(result: dict):
     logs.append(entry)
 
     with open(log_file, "w") as f:
-        json.dump(logs, f, indent=2)
+        json.dump(logs, f, indent=2, default=convert_numpy)
 
     print(f"✅ 獎勵紀錄完成（reward={reward}）")
