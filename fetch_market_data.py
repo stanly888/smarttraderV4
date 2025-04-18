@@ -19,9 +19,10 @@ def fetch_market_data(symbol: str = "BTC-USDT", interval: str = "15m", limit: in
 
         raw = data["data"]
         df = pd.DataFrame(raw, columns=[
-            "timestamp", "open", "high", "low", "close", "volume"
+            "timestamp", "open", "high", "low", "close", "volume", "quoteVolume", "count"
         ])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df = df[["timestamp", "open", "high", "low", "close", "volume"]]
         df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
         return df.sort_values("timestamp").reset_index(drop=True)
 
