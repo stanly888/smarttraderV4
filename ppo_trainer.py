@@ -3,50 +3,72 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-from ppo_model import PPOActorCritic
+from ppo_model import PPOModel
 
-model = PPOActorCritic(input_dim=10)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
-eps_clip = 0.2
-gamma = 0.99
+# 超參數
+TRAIN_STEPS = 20
+GAMMA = 0.99
+LR = 1e-3
+
+# 初始化模型與 optimizer
+model = PPOModel(input_dim=10)
+optimizer = optim.Adam(model.parameters(), lr=LR)
+
+def simulate_reward(direction, confidence):
+    """模擬獎勵：TP/SL 命中機率與方向相關"""
+    if direction == "Long":
+        tp_hit = np.random.rand() < 0.4 + 0.5 * confidence
+        sl_hit = not tp_hit
+    else:
+        tp_hit = np.random.rand() < 0.3 + 0.4 * confidence
+        sl_hit = not tp_hit
+
+    reward = 1.0 if tp_hit else -1.0
+    return reward, tp_hit, sl_hit
 
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    probs_old, value_old = model(x).detach()
-    action = torch.multinomial(probs_old, 1)
+    all_rewards = []
 
-    # 模擬 reward
-    reward = torch.tensor([np.random.uniform(-1, 1)], dtype=torch.float32)
+    for _ in range(TRAIN_STEPS):
+        logits, value = model(x)
+        probs = F.softmax(logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
 
-    for _ in range(20):  # 多次更新
-        probs, value = model(x)
-        dist_ratio = (probs[0, action] / (probs_old[0, action] + 1e-8)).clamp(1 - eps_clip, 1 + eps_clip)
-        advantage = reward + gamma * value - value_old
+        reward_val, _, _ = simulate_reward("Long" if action.item() == 0 else "Short", probs[0, action].item())
+        reward = torch.tensor([reward_val], dtype=torch.float32)
+        all_rewards.append(reward.item())
 
-        actor_loss = -dist_ratio * advantage.detach()
-        critic_loss = F.mse_loss(value, reward + gamma * value_old)
+        _, next_value = model(x)
+        advantage = reward + GAMMA * next_value - value
+
+        actor_loss = -dist.log_prob(action) * advantage.detach()
+        critic_loss = advantage.pow(2)
         loss = actor_loss + critic_loss
 
         optimizer.zero_grad()
-        loss.mean().backward()
+        loss.backward()
         optimizer.step()
 
-    # 預測結果
+    # 輸出策略結果
     with torch.no_grad():
-        probs, _ = model(x)
-        direction = "Long" if probs[0][0] > probs[0][1] else "Short"
-        confidence = float(probs.max().item())
+        logits, _ = model(x)
+        probs = F.softmax(logits, dim=-1)
+        confidence, action = torch.max(probs, dim=-1)
 
-    tp = round(1.8 + confidence * 2.5, 2)
-    sl = round(1.2 + (1 - confidence) * 2.0, 2)
-    leverage = int(min(10, max(1, int(confidence * 10))))
+    direction = "Long" if action.item() == 0 else "Short"
+    leverage = int(2 + 3 * confidence.item())  # 根據信心模擬槓桿
+    tp = round(1.5 + 2 * confidence.item(), 2)  # 模擬 TP%
+    sl = round(1.0 + 1 * (1 - confidence.item()), 2)  # 模擬 SL%
+    score = np.mean(all_rewards)
 
     return {
         "model": "PPO",
         "direction": direction,
-        "confidence": confidence,
+        "confidence": confidence.item(),
+        "leverage": leverage,
         "tp": tp,
         "sl": sl,
-        "leverage": leverage,
-        "score": float(reward.item())
+        "score": score
     }
