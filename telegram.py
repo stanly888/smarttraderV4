@@ -1,5 +1,7 @@
 import json
 import requests
+from datetime import datetime
+from pytz import timezone
 
 # 讀取 Telegram Token & Chat ID
 with open("config.json", "r") as f:
@@ -9,9 +11,18 @@ TELEGRAM_TOKEN = config["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = config["TELEGRAM_CHAT_ID"]
 
 def send_strategy_update(result):
+    # 將 UTC 時間轉換為台灣時間
+    raw_timestamp = result.get('timestamp')
+    try:
+        utc_dt = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+        taipei_time = utc_dt.astimezone(timezone("Asia/Taipei"))
+        formatted_time = taipei_time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        formatted_time = raw_timestamp or "N/A"
+
     message = f"""
 📡 [SmartTrader 策略推播]
-模型：{result['model']}（更新於：{result.get('timestamp', 'N/A')}）
+模型：{result['model']}（更新於：{formatted_time}）
 方向：{result.get('direction', 'N/A')}（信心：{result.get('confidence', 0):.2f}）
 槓桿：{result.get('leverage', 'N/A')}x
 TP：+{result.get('tp', 0)}% / SL：-{result.get('sl', 0)}%
