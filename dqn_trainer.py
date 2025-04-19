@@ -1,54 +1,33 @@
-# dqn_trainer.py
-import torch
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
-import os
-from dqn_model import DQN
-from replay_buffer import ReplayBuffer
-from reward_fetcher import get_real_reward  # ✅ 實盤回饋
-
-# 初始化
-model = DQN(input_dim=20)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
-buffer = ReplayBuffer(capacity=1000)
-
-MODEL_PATH = "dqn_model.pt"
-
-def save_model(model, path=MODEL_PATH):
-    torch.save(model.state_dict(), path)
-    print(f"✅ DQN 模型已儲存：{path}")
-
-def load_model_if_exists(model, path=MODEL_PATH):
-    if os.path.exists(path):
-        model.load_state_dict(torch.load(path))
-        print(f"✅ DQN 模型已載入：{path}")
-    else:
-        print("⚠️ 未找到 DQN 模型檔案，使用未訓練參數")
-
-load_model_if_exists(model)
-
-TRAIN_STEPS = 20
-
-def simulate_reward(action: int) -> float:
-    if action == 0: return np.random.uniform(-1.0, 1.5)
-    elif action == 1: return np.random.uniform(-1.0, 1.5)
-    else: return np.random.uniform(-0.1, 0.2)
-
+# dqn_trainer.py（修改 train_dqn 部分）
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
     for _ in range(TRAIN_STEPS):
-        q_values = model(x)
-        action = torch.argmax(q_values, dim=-1).item()
+        direction_logits, tp_out, sl_out, lev_out = model(x)
+        probs = torch.softmax(direction_logits, dim=-1)
+        action = torch.argmax(probs, dim=-1).item()
+        confidence = probs[0, action].item()
 
-        reward_val, _, _ = get_real_reward()  # ✅ 優先讀取實盤 reward
+        # 根據模型輸出決定 TP/SL/Leverage
+        tp = torch.sigmoid(tp_out).item() * 3.5
+        sl = torch.sigmoid(sl_out).item() * 2.0
+        leverage = torch.sigmoid(lev_out).item() * 9 + 1
+
+        reward_val, _, _ = get_real_reward()
         if reward_val is None:
-            reward_val = simulate_reward(action)
+            # 模擬 reward
+            if action == 2:
+                reward_val = np.random.uniform(-0.1, 0.2)
+            else:
+                hit = np.random.rand()
+                raw = tp if hit < 0.5 else -sl
+                fee = 0.0004 * leverage * 2
+                funding = 0.00025 * leverage
+                reward_val = raw * leverage - fee - funding
 
         total_reward += reward_val
-        buffer.push(x.squeeze(0).flatten().numpy(), action, reward_val)
+        buffer.push(x.squeeze(0).numpy(), action, reward_val)
 
         if len(buffer) > 16:
             batch = buffer.sample(16)
@@ -61,7 +40,8 @@ def train_dqn(features: np.ndarray) -> dict:
             actions = torch.tensor([b[1] for b in batch], dtype=torch.long)
             rewards = torch.tensor([b[2] for b in batch], dtype=torch.float32)
 
-            q_vals = model(states)
+            direction_logits, _, _, _ = model(states)
+            q_vals = direction_logits
             q_target = q_vals.clone().detach()
             for i in range(16):
                 q_target[i, actions[i]] = rewards[i]
@@ -72,17 +52,17 @@ def train_dqn(features: np.ndarray) -> dict:
             loss.backward()
             optimizer.step()
 
-    avg_reward = total_reward / TRAIN_STEPS
-    confidence = torch.softmax(model(x), dim=-1)[0, action].item()
-
     save_model(model)
+    buffer.save(BUFFER_PATH)
+
+    direction = "Long" if action == 0 else "Short" if action == 1 else "Skip"
 
     return {
         "model": "DQN",
-        "direction": "Long" if action == 0 else "Short" if action == 1 else "Skip",
+        "direction": direction,
         "confidence": round(confidence, 3),
-        "tp": round(np.random.uniform(1.0, 3.5), 2),
-        "sl": round(np.random.uniform(1.0, 2.5), 2),
-        "leverage": np.random.choice([2, 3, 5]),
-        "score": round(avg_reward, 4)
+        "tp": round(tp, 2),
+        "sl": round(sl, 2),
+        "leverage": int(leverage),
+        "score": round(total_reward / TRAIN_STEPS, 4)
     }
