@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-from ppo_model import PPOModel
+from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 
 # 超參數
 TRAIN_STEPS = 20
@@ -11,11 +11,12 @@ GAMMA = 0.99
 LR = 1e-3
 
 # 初始化模型與 optimizer
-model = PPOModel(input_dim=10)
+model = UnifiedRLModel(input_dim=10)
+load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
 def simulate_reward(direction, confidence):
-    """模擬獎勵：TP/SL 命中機率與方向相關"""
+    """模擬 TP/SL 命中與方向信心的 reward"""
     if direction == "Long":
         tp_hit = np.random.rand() < 0.4 + 0.5 * confidence
         sl_hit = not tp_hit
@@ -62,6 +63,8 @@ def train_ppo(features: np.ndarray) -> dict:
     tp = round(1.5 + 2 * confidence.item(), 2)  # 模擬 TP%
     sl = round(1.0 + 1 * (1 - confidence.item()), 2)  # 模擬 SL%
     score = np.mean(all_rewards)
+
+    save_model(model, "ppo_model.pt")  # ✅ 儲存模型
 
     return {
         "model": "PPO",
