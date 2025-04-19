@@ -14,7 +14,7 @@ LR = 1e-3
 BATCH_SIZE = 8
 
 # 初始化模型與 optimizer
-model = UnifiedRLModel(input_dim=20)
+model = UnifiedRLModel(input_dim=33)
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
