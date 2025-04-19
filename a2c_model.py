@@ -4,7 +4,7 @@ import torch.nn as nn
 import os
 
 class ActorCritic(nn.Module):
-    def __init__(self, input_dim: int = 20, hidden_dim: int = 64, action_dim: int = 2):
+    def __init__(self, input_dim: int = 33, hidden_dim: int = 64, action_dim: int = 2):  # ✅ input_dim=33
         super(ActorCritic, self).__init__()
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
