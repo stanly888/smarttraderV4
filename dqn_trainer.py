@@ -1,3 +1,4 @@
+import numpy as np
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
