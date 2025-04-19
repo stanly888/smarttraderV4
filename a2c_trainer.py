@@ -31,7 +31,8 @@ def train_a2c(features: np.ndarray) -> dict:
         reward = simulate_reward(direction, tp, sl)
         total_reward += reward
 
-        replay_buffer.push((x, action, reward))
+        # ✅ 修正這行：不要包成 tuple
+        replay_buffer.push(x, action, reward)
 
         _, next_value = model(x)
         advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
@@ -48,7 +49,7 @@ def train_a2c(features: np.ndarray) -> dict:
     if len(replay_buffer) >= 5:
         for _ in range(3):  # 回放次數
             batch = replay_buffer.sample(5)
-            for state, action, reward in batch:
+            for state, action, reward in zip(*batch[:3]):  # ✅ 對應 sample 回傳格式
                 logits, value = model(state)
                 probs = F.softmax(logits, dim=-1)
                 dist = torch.distributions.Categorical(probs)
