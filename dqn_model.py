@@ -5,19 +5,25 @@ import torch.nn.functional as F
 import os
 
 class DQN(nn.Module):
-    def __init__(self, input_dim: int = 20, hidden_dim: int = 64, output_dim: int = 3):
-        """
-        output_dim 預設為 3，對應 [Long, Short, Skip]
-        """
+    def __init__(self, input_dim: int = 20, hidden_dim: int = 64):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.out = nn.Linear(hidden_dim, output_dim)
+
+        # 五個輸出：方向、止盈、止損、槓桿
+        self.direction_head = nn.Linear(hidden_dim, 3)  # Long / Short / Skip
+        self.tp_head = nn.Linear(hidden_dim, 1)         # TP %
+        self.sl_head = nn.Linear(hidden_dim, 1)         # SL %
+        self.lev_head = nn.Linear(hidden_dim, 1)        # Leverage 倍數
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return self.out(x)
+        direction_logits = self.direction_head(x)
+        tp_out = self.tp_head(x)
+        sl_out = self.sl_head(x)
+        lev_out = self.lev_head(x)
+        return direction_logits, tp_out, sl_out, lev_out
 
 # ✅ 儲存模型
 def save_model(model, path="dqn_model.pt"):
