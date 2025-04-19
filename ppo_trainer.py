@@ -5,6 +5,7 @@ import torch.optim as optim
 import numpy as np
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
+from reward_fetcher import get_real_reward  # ✅ 引入真實 reward 模組
 
 # 超參數
 TRAIN_STEPS = 20
@@ -13,28 +14,22 @@ LR = 1e-3
 BATCH_SIZE = 8
 
 # 初始化模型與 optimizer
-model = UnifiedRLModel(input_dim=10)
+model = UnifiedRLModel(input_dim=20)  # ✅ 已升級 input_dim=20 雙週期輸入
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 replay_buffer = ReplayBuffer(capacity=1000)
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
-    """根據方向、TP、SL、槓桿模擬 reward，含手續費與資金費"""
     hit = np.random.rand()
-    if hit < 0.5:
-        raw_profit = tp
-    else:
-        raw_profit = -sl
-
-    fee = 0.0004 * leverage * 2      # 假設開平倉總手續費 0.08%
-    funding = 0.00025 * leverage     # 資金費率
-    reward = raw_profit * leverage - fee - funding
-    return round(reward, 4)
+    raw_profit = tp if hit < 0.5 else -sl
+    fee = 0.0004 * leverage * 2
+    funding = 0.00025 * leverage
+    return round(raw_profit * leverage - fee - funding, 4)
 
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
-    # Step 1: 取得模型輸出（包含五輸出）
+    # Step 1: 模型輸出（五輸出）
     logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
     dist = torch.distributions.Categorical(probs)
@@ -46,12 +41,15 @@ def train_ppo(features: np.ndarray) -> dict:
     sl = torch.sigmoid(sl_out).item() * 2.0
     leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
-    # Step 2: 模擬 reward
-    reward_val = simulate_reward(direction, tp, sl, leverage)
+    # Step 2: 優先使用實盤 reward，否則 fallback 用模擬 reward
+    reward_val, hit_tp, hit_sl = get_real_reward()
+    if reward_val is None:
+        reward_val = simulate_reward(direction, tp, sl, leverage)
+
     reward = torch.tensor([reward_val], dtype=torch.float32)
     replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
 
-    # Step 3: 訓練（使用 Replay Buffer）
+    # Step 3: Replay Buffer 訓練
     if len(replay_buffer) >= BATCH_SIZE:
         states, actions, rewards = replay_buffer.sample(BATCH_SIZE)
         states = torch.tensor(states, dtype=torch.float32)
