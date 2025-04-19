@@ -1,23 +1,19 @@
-# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from a2c_model import ActorCritic
+from replay_buffer import ReplayBuffer
 
-# 初始化
-model = ActorCritic(input_dim=10, action_dim=2)  # 只支援 Long / Short
+model = ActorCritic(input_dim=10, action_dim=2)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
+replay_buffer = ReplayBuffer(capacity=1000)
 
 def simulate_reward(direction: str, tp: float, sl: float) -> float:
-    """模擬是否命中 TP / SL，回傳 reward"""
     success = np.random.rand()
-    if direction == "Long":
-        return tp if success > 0.45 else -sl
-    elif direction == "Short":
-        return tp if success > 0.4 else -sl
+    return tp if success > 0.45 else -sl
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
@@ -35,6 +31,8 @@ def train_a2c(features: np.ndarray) -> dict:
         reward = simulate_reward(direction, tp, sl)
         total_reward += reward
 
+        replay_buffer.push((x, action, reward))
+
         _, next_value = model(x)
         advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
 
@@ -45,6 +43,26 @@ def train_a2c(features: np.ndarray) -> dict:
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+    # Replay Buffer 經驗回放
+    if len(replay_buffer) >= 5:
+        for _ in range(3):  # 回放次數
+            batch = replay_buffer.sample(5)
+            for state, action, reward in batch:
+                logits, value = model(state)
+                probs = F.softmax(logits, dim=-1)
+                dist = torch.distributions.Categorical(probs)
+
+                _, next_value = model(state)
+                advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
+
+                actor_loss = -dist.log_prob(action) * advantage.detach()
+                critic_loss = advantage.pow(2)
+                loss = actor_loss + critic_loss
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
     with torch.no_grad():
         logits, _ = model(x)
