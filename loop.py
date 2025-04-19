@@ -1,11 +1,10 @@
-# loop.py
 import time
 import json
 import os
 import logging
 from datetime import datetime
 from trainer import train_model
-from order_executor import get_current_price
+from price_fetcher import get_current_price  # ✅ 改為從這裡引入
 from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
@@ -13,7 +12,6 @@ from logbook_reward import log_reward_result
 
 TRADES_FILE = "real_trades.json"
 
-# 啟用日誌系統（Render 可顯示）
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
@@ -22,9 +20,8 @@ logging.basicConfig(
 logging.info("✅ SmartTrader loop 啟動成功")
 
 report_sent = False
-last_retrain_minute = -1  # 為避免 retrain 重複執行
+last_retrain_minute = -1
 
-# ✅ 檢查 open trades 是否命中 TP/SL
 def check_open_trades():
     try:
         if not os.path.exists(TRADES_FILE):
@@ -68,14 +65,10 @@ def check_open_trades():
     except Exception as e:
         logging.warning(f"❌ 檢查 open trades 錯誤：{e}")
 
-# === 主迴圈 ===
 while True:
     now = time.localtime()
-
-    # ✅ 每分鐘檢查 TP/SL 命中
     check_open_trades()
 
-    # ✅ 每 15 分 retrain 一次（避免重複 retrain）
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
@@ -88,7 +81,6 @@ while True:
         else:
             logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
 
-    # ✅ 每日 00:00 推播日報（僅一次）
     if now.tm_hour == 0 and not report_sent:
         metrics = analyze_daily_log()
         send_daily_report(metrics)
@@ -97,5 +89,4 @@ while True:
     elif now.tm_hour != 0:
         report_sent = False
 
-    # ✅ 每分鐘執行一次
     time.sleep(60)
