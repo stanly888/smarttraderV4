@@ -10,22 +10,35 @@ class UnifiedRLModel(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
         )
-        self.policy_head = nn.Linear(hidden_dim, 2)  # logits for Long / Short
-        self.value_head = nn.Linear(hidden_dim, 1)   # Value estimate
+        self.policy_head = nn.Linear(hidden_dim, 2)    # logits for Long / Short
+        self.value_head = nn.Linear(hidden_dim, 1)     # Critic value
+        self.tp_head = nn.Linear(hidden_dim, 1)        # Take Profit %
+        self.sl_head = nn.Linear(hidden_dim, 1)        # Stop Loss %
+        self.lev_head = nn.Linear(hidden_dim, 1)       # Leverage 倍數
 
     def forward(self, x):
-        x = self.shared(x)
-        return self.policy_head(x), self.value_head(x)
+        shared_out = self.shared(x)
+        logits = self.policy_head(shared_out)
+        value = self.value_head(shared_out)
+        tp_out = self.tp_head(shared_out)
+        sl_out = self.sl_head(shared_out)
+        lev_out = self.lev_head(shared_out)
+        return logits, value, tp_out, sl_out, lev_out
 
     def act(self, x):
-        logits, value = self.forward(x)
+        logits, value, tp_out, sl_out, lev_out = self.forward(x)
         probs = torch.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample()
-        return action.item(), dist.log_prob(action), value
+
+        tp = torch.sigmoid(tp_out) * 3.5       # TP %：0 ~ 3.5
+        sl = torch.sigmoid(sl_out) * 2.0       # SL %：0 ~ 2.0
+        lev = torch.sigmoid(lev_out) * 9 + 1   # Leverage：1 ~ 10 倍
+
+        return action.item(), dist.log_prob(action), value, tp.item(), sl.item(), lev.item()
 
     def evaluate(self, x, action):
-        logits, value = self.forward(x)
+        logits, value, _, _, _ = self.forward(x)
         probs = torch.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         log_prob = dist.log_prob(action)
