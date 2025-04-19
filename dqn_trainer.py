@@ -1,3 +1,4 @@
+# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -5,13 +6,13 @@ import numpy as np
 import os
 from dqn_model import DQN
 from replay_buffer import ReplayBuffer
+from reward_fetcher import get_real_reward  # ✅ 實盤回饋
 
 # 初始化
-model = DQN(input_dim=10)
+model = DQN(input_dim=20)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
 
-# 模型儲存與載入
 MODEL_PATH = "dqn_model.pt"
 
 def save_model(model, path=MODEL_PATH):
@@ -27,13 +28,12 @@ def load_model_if_exists(model, path=MODEL_PATH):
 
 load_model_if_exists(model)
 
-# 訓練次數
 TRAIN_STEPS = 20
 
 def simulate_reward(action: int) -> float:
-    if action == 0: return np.random.uniform(-1.0, 1.5)  # Long
-    elif action == 1: return np.random.uniform(-1.0, 1.5)  # Short
-    else: return np.random.uniform(-0.1, 0.2)  # Skip
+    if action == 0: return np.random.uniform(-1.0, 1.5)
+    elif action == 1: return np.random.uniform(-1.0, 1.5)
+    else: return np.random.uniform(-0.1, 0.2)
 
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
@@ -42,16 +42,16 @@ def train_dqn(features: np.ndarray) -> dict:
     for _ in range(TRAIN_STEPS):
         q_values = model(x)
         action = torch.argmax(q_values, dim=-1).item()
-        reward = simulate_reward(action)
-        total_reward += reward
 
-        # 儲存到 Replay Buffer，保證 push 是一維
-        buffer.push(x.squeeze(0).flatten().numpy(), action, reward)
+        reward_val, _, _ = get_real_reward()  # ✅ 優先讀取實盤 reward
+        if reward_val is None:
+            reward_val = simulate_reward(action)
 
-        # 隨機取樣訓練（回放記憶）
+        total_reward += reward_val
+        buffer.push(x.squeeze(0).flatten().numpy(), action, reward_val)
+
         if len(buffer) > 16:
             batch = buffer.sample(16)
-
             try:
                 states = torch.tensor(np.stack([np.array(b[0]).flatten() for b in batch]), dtype=torch.float32)
             except ValueError as e:
@@ -72,7 +72,6 @@ def train_dqn(features: np.ndarray) -> dict:
             loss.backward()
             optimizer.step()
 
-    # 輸出結果
     avg_reward = total_reward / TRAIN_STEPS
     confidence = torch.softmax(model(x), dim=-1)[0, action].item()
 
