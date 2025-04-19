@@ -2,9 +2,12 @@ import requests
 import pandas as pd
 
 def fetch_market_data(symbol: str = "BTC-USDT", interval: str = "15m", limit: int = 100) -> pd.DataFrame:
-    url = "https://open-api.bingx.com/openApi/spot/v1/market/kline"
+    # Binance 期貨 API 使用 USDT 合約，symbol 需為 "BTCUSDT" 格式（無中間 dash）
+    binance_symbol = symbol.replace("-", "")
+
+    url = "https://fapi.binance.com/fapi/v1/klines"
     params = {
-        "symbol": symbol,
+        "symbol": binance_symbol,
         "interval": interval,
         "limit": limit
     }
@@ -14,18 +17,16 @@ def fetch_market_data(symbol: str = "BTC-USDT", interval: str = "15m", limit: in
         response.raise_for_status()
         data = response.json()
 
-        if data.get("code") != 0 or "data" not in data:
-            raise ValueError(f"BingX 回傳異常：{data}")
-
-        raw = data["data"]
-        df = pd.DataFrame(raw, columns=[
-            "timestamp", "open", "high", "low", "close", "volume", "quoteVolume", "count"
+        df = pd.DataFrame(data, columns=[
+            "open_time", "open", "high", "low", "close", "volume",
+            "close_time", "quote_asset_volume", "number_of_trades",
+            "taker_buy_base", "taker_buy_quote", "ignore"
         ])
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df["timestamp"] = pd.to_datetime(df["open_time"], unit="ms")
         df = df[["timestamp", "open", "high", "low", "close", "volume"]]
         df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].astype(float)
         return df.sort_values("timestamp").reset_index(drop=True)
 
     except Exception as e:
-        print(f"❌ 取得 BingX K 線資料失敗: {e}")
+        print(f"❌ 取得 Binance K 線資料失敗: {e}")
         raise e
