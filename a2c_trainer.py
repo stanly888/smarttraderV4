@@ -1,26 +1,23 @@
+# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from a2c_model import ActorCritic
 
-model = ActorCritic(input_dim=10)
+# 初始化
+model = ActorCritic(input_dim=10, action_dim=2)  # 只支援 Long / Short
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
 TRAIN_STEPS = 20
+GAMMA = 0.99
 
 def simulate_reward(direction: str, tp: float, sl: float) -> float:
-    """
-    模擬獎勵，方向正確 + 命中 TP 給正報酬，否則負報酬。
-    可換成實際交易結果回饋。
-    """
+    """模擬是否命中 TP / SL，回傳 reward"""
     success = np.random.rand()
     if direction == "Long":
-        return tp if success > 0.4 else -sl
+        return tp if success > 0.45 else -sl
     elif direction == "Short":
         return tp if success > 0.4 else -sl
-    else:
-        return -0.1
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
@@ -29,19 +26,19 @@ def train_a2c(features: np.ndarray) -> dict:
     for _ in range(TRAIN_STEPS):
         logits, value = model(x)
         probs = F.softmax(logits, dim=-1)
-        action = torch.multinomial(probs, num_samples=1)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
 
-        direction = ["Hold", "Long", "Short"][action.item()]
-        tp = round(np.random.uniform(1.5, 3.5), 2)
+        direction = "Long" if action.item() == 0 else "Short"
+        tp = round(np.random.uniform(1.5, 3.0), 2)
         sl = round(np.random.uniform(1.0, 2.0), 2)
-
         reward = simulate_reward(direction, tp, sl)
         total_reward += reward
 
         _, next_value = model(x)
-        advantage = torch.tensor([reward]) + 0.99 * next_value - value
+        advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
 
-        actor_loss = -torch.log(probs[0, action]) * advantage.detach()
+        actor_loss = -dist.log_prob(action) * advantage.detach()
         critic_loss = advantage.pow(2)
         loss = actor_loss + critic_loss
 
@@ -49,13 +46,17 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    confidence = float(probs[0, action])
+    with torch.no_grad():
+        logits, _ = model(x)
+        probs = F.softmax(logits, dim=-1)
+        confidence, selected = torch.max(probs, dim=-1)
+
     return {
         "model": "A2C",
-        "direction": direction,
-        "confidence": round(confidence, 4),
+        "direction": "Long" if selected.item() == 0 else "Short",
+        "confidence": round(confidence.item(), 4),
         "tp": tp,
         "sl": sl,
-        "leverage": np.random.choice([3, 5, 10]),
+        "leverage": int(2 + 3 * confidence.item()),
         "score": round(total_reward / TRAIN_STEPS, 4)
     }
