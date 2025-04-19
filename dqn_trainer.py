@@ -1,4 +1,3 @@
-# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -52,7 +51,7 @@ def train_dqn(features: np.ndarray) -> dict:
         # 隨機取樣訓練（回放記憶）
         if len(buffer) > 16:
             batch = buffer.sample(16)
-            states = torch.tensor(np.array([b[0] for b in batch]), dtype=torch.float32)
+            states = torch.tensor(np.stack([b[0] for b in batch]), dtype=torch.float32)  # ✅ 修正這裡
             actions = torch.tensor([b[1] for b in batch], dtype=torch.long)
             rewards = torch.tensor([b[2] for b in batch], dtype=torch.float32)
 
