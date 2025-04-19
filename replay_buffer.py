@@ -10,6 +10,8 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def push(self, state, action, reward):
+        # ✅ 確保 state 一律為 1D numpy array，例如 (10,)
+        state = np.array(state).flatten()
         self.add(state, action, reward, next_state=state, done=False)
 
     def sample(self, batch_size):
@@ -19,7 +21,7 @@ class ReplayBuffer:
         state, action, reward, next_state, done = map(np.array, zip(*batch))
         return state, action, reward, next_state, done
 
-    def __len__(self):  # <== 就是這行解決你現在的錯誤
+    def __len__(self):
         return len(self.buffer)
 
     def size(self):
