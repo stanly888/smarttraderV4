@@ -5,7 +5,7 @@ import torch.optim as optim
 import numpy as np
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
-from reward_fetcher import get_real_reward  # ✅ 引入真實 reward 模組
+from reward_fetcher import get_real_reward  # ✅ 實盤 reward 模組
 
 # 超參數
 TRAIN_STEPS = 20
@@ -14,10 +14,13 @@ LR = 1e-3
 BATCH_SIZE = 8
 
 # 初始化模型與 optimizer
-model = UnifiedRLModel(input_dim=20)  # ✅ 已升級 input_dim=20 雙週期輸入
+model = UnifiedRLModel(input_dim=20)
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
+
+# ✅ 建立並載入 Replay Buffer 記憶
 replay_buffer = ReplayBuffer(capacity=1000)
+replay_buffer.load("ppo_replay.json")
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
     hit = np.random.rand()
@@ -29,7 +32,6 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> fl
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
-    # Step 1: 模型輸出（五輸出）
     logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
     dist = torch.distributions.Categorical(probs)
@@ -41,7 +43,6 @@ def train_ppo(features: np.ndarray) -> dict:
     sl = torch.sigmoid(sl_out).item() * 2.0
     leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
-    # Step 2: 優先使用實盤 reward，否則 fallback 用模擬 reward
     reward_val, hit_tp, hit_sl = get_real_reward()
     if reward_val is None:
         reward_val = simulate_reward(direction, tp, sl, leverage)
@@ -49,7 +50,6 @@ def train_ppo(features: np.ndarray) -> dict:
     reward = torch.tensor([reward_val], dtype=torch.float32)
     replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
 
-    # Step 3: Replay Buffer 訓練
     if len(replay_buffer) >= BATCH_SIZE:
         states, actions, rewards = replay_buffer.sample(BATCH_SIZE)
         states = torch.tensor(states, dtype=torch.float32)
@@ -71,7 +71,8 @@ def train_ppo(features: np.ndarray) -> dict:
             loss.backward()
             optimizer.step()
 
-    # Step 4: 儲存模型並輸出策略結果
+    # ✅ 儲存 Replay Buffer
+    replay_buffer.save("ppo_replay.json")
     save_model(model, "ppo_model.pt")
 
     return {
