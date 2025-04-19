@@ -1,11 +1,11 @@
-# loop.py
 import time
 import json
 import os
 import logging
 from datetime import datetime
 from trainer import train_model
-from order_executor import get_current_price, submit_order  # ✅ 新增 submit_order
+from price_fetcher import get_current_price        # ✅ 從 price_fetcher 分離引用
+from order_executor import submit_order            # ✅ 保留送單模組
 from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
@@ -70,8 +70,10 @@ def check_open_trades():
 while True:
     now = time.localtime()
 
+    # ✅ 每分鐘檢查 TP/SL 命中
     check_open_trades()
 
+    # ✅ 每 15 分 retrain 並推播
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
@@ -80,6 +82,7 @@ while True:
             record_retrain_status(result['model'], result['score'], result['confidence'])
             log_reward_result(result)
             send_strategy_update(result)
+
             logging.info(f"✅ 已完成訓練與推播：{result['model']} | 信心={result['confidence']:.2f} | TP={result['tp']}% SL={result['sl']}%")
 
             # ✅ 執行模擬送單
@@ -94,6 +97,7 @@ while True:
         else:
             logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
 
+    # ✅ 每日 00:00 推播日報（僅一次）
     if now.tm_hour == 0 and not report_sent:
         metrics = analyze_daily_log()
         send_daily_report(metrics)
