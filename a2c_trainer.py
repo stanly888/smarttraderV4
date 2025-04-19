@@ -5,13 +5,16 @@ import torch.optim as optim
 import numpy as np
 from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
-from reward_fetcher import get_real_reward  # ✅ 整合實盤 reward 模組
+from reward_fetcher import get_real_reward
 
 model = ActorCritic(input_dim=20, action_dim=2)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
+
+# ✅ 初始化並嘗試載入 replay buffer
 replay_buffer = ReplayBuffer(capacity=1000)
+replay_buffer.load("a2c_replay.json")
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
     if np.random.rand() < 0.5:
@@ -56,7 +59,6 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    # 回放訓練
     if len(replay_buffer) >= 5:
         for _ in range(3):
             batch = replay_buffer.sample(5)
@@ -79,7 +81,9 @@ def train_a2c(features: np.ndarray) -> dict:
                 loss.backward()
                 optimizer.step()
 
-    # 輸出策略結果
+    # ✅ 訓練後儲存 replay buffer
+    replay_buffer.save("a2c_replay.json")
+
     with torch.no_grad():
         logits, _, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
