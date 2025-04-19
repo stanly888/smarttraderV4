@@ -1,4 +1,40 @@
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
+import os
+from dqn_model import DQN
+from replay_buffer import ReplayBuffer
+
+# 初始化
+model = DQN(input_dim=10)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+buffer = ReplayBuffer(capacity=1000)
+
+# 模型儲存與載入
+MODEL_PATH = "dqn_model.pt"
+
+def save_model(model, path=MODEL_PATH):
+    torch.save(model.state_dict(), path)
+    print(f"✅ DQN 模型已儲存：{path}")
+
+def load_model_if_exists(model, path=MODEL_PATH):
+    if os.path.exists(path):
+        model.load_state_dict(torch.load(path))
+        print(f"✅ DQN 模型已載入：{path}")
+    else:
+        print("⚠️ 未找到 DQN 模型檔案，使用未訓練參數")
+
+load_model_if_exists(model)
+
+# 訓練次數
+TRAIN_STEPS = 20
+
+def simulate_reward(action: int) -> float:
+    if action == 0: return np.random.uniform(-1.0, 1.5)  # Long
+    elif action == 1: return np.random.uniform(-1.0, 1.5)  # Short
+    else: return np.random.uniform(-0.1, 0.2)  # Skip
+
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
@@ -17,11 +53,10 @@ def train_dqn(features: np.ndarray) -> dict:
             batch = buffer.sample(16)
 
             try:
-                # ✅ 加入 try-except 保護 + flatten 確保 shape 一致
                 states = torch.tensor(np.stack([np.array(b[0]).flatten() for b in batch]), dtype=torch.float32)
             except ValueError as e:
                 print(f"[警告] DQN 回放失敗，state shape 不一致：{e}")
-                continue  # 跳過這輪訓練
+                continue
 
             actions = torch.tensor([b[1] for b in batch], dtype=torch.long)
             rewards = torch.tensor([b[2] for b in batch], dtype=torch.float32)
