@@ -1,4 +1,3 @@
-# replay_buffer.py
 import random
 from collections import deque
 import numpy as np
@@ -9,6 +8,10 @@ class ReplayBuffer:
 
     def add(self, state, action, reward, next_state, done):
         self.buffer.append((state, action, reward, next_state, done))
+
+    def push(self, state, action, reward):
+        # 給 PPO 用的簡化版本
+        self.add(state, action, reward, next_state=state, done=False)
 
     def sample(self, batch_size):
         if len(self.buffer) < batch_size:
