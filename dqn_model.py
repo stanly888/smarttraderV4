@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import os
 
 class DQN(nn.Module):
-    def __init__(self, input_dim: int = 20, hidden_dim: int = 64):
+    def __init__(self, input_dim: int = 33, hidden_dim: int = 64):  # ✅ input_dim 改為 33
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
