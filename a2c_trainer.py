@@ -50,6 +50,8 @@ def train_a2c(features: np.ndarray) -> dict:
             batch = replay_buffer.sample(5)
             for state, action, reward in zip(*batch[:3]):
                 state_tensor = torch.tensor(state, dtype=torch.float32)
+                action_tensor = torch.tensor(action, dtype=torch.int64)  # ✅ 修正關鍵行
+
                 logits, value = model(state_tensor)
                 probs = F.softmax(logits, dim=-1)
                 dist = torch.distributions.Categorical(probs)
@@ -57,7 +59,7 @@ def train_a2c(features: np.ndarray) -> dict:
                 _, next_value = model(state_tensor)
                 advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
 
-                actor_loss = -dist.log_prob(action) * advantage.detach()
+                actor_loss = -dist.log_prob(action_tensor) * advantage.detach()
                 critic_loss = advantage.pow(2)
                 loss = actor_loss + critic_loss
 
