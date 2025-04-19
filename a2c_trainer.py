@@ -1,3 +1,4 @@
+# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -11,29 +12,38 @@ TRAIN_STEPS = 20
 GAMMA = 0.99
 replay_buffer = ReplayBuffer(capacity=1000)
 
-def simulate_reward(direction: str, tp: float, sl: float) -> float:
-    success = np.random.rand()
-    return tp if success > 0.45 else -sl
+def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
+    """模擬 TP/SL 命中 + 槓桿後 reward，含手續費與資金費"""
+    if np.random.rand() < 0.5:
+        raw = tp
+    else:
+        raw = -sl
+    fee = 0.0004 * leverage * 2      # 假設總手續費 0.08%
+    funding = 0.00025 * leverage     # 資金費率
+    return raw * leverage - fee - funding
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
     for _ in range(TRAIN_STEPS):
-        logits, value = model(x)
+        logits, value, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample()
 
         direction = "Long" if action.item() == 0 else "Short"
-        tp = round(np.random.uniform(1.5, 3.0), 2)
-        sl = round(np.random.uniform(1.0, 2.0), 2)
-        reward = simulate_reward(direction, tp, sl)
+        confidence = probs[0, action].item()
+        tp = torch.sigmoid(tp_out).item() * 3.5
+        sl = torch.sigmoid(sl_out).item() * 2.0
+        leverage = torch.sigmoid(lev_out).item() * 9 + 1
+
+        reward = simulate_reward(direction, tp, sl, leverage)
         total_reward += reward
 
-        replay_buffer.push(x, action, reward)
+        replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward)
 
-        _, next_value = model(x)
+        _, next_value, _, _, _ = model(x)
         advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
 
         actor_loss = -dist.log_prob(action) * advantage.detach()
@@ -44,19 +54,19 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    # Replay Buffer 經驗回放
+    # Replay Buffer 回放訓練
     if len(replay_buffer) >= 5:
-        for _ in range(3):  # 回放次數
+        for _ in range(3):
             batch = replay_buffer.sample(5)
             for state, action, reward in zip(*batch[:3]):
                 state_tensor = torch.tensor(state, dtype=torch.float32)
-                action_tensor = torch.tensor(action, dtype=torch.int64)  # ✅ 修正關鍵行
+                action_tensor = torch.tensor(action, dtype=torch.int64)
 
-                logits, value = model(state_tensor)
+                logits, value, _, _, _ = model(state_tensor)
                 probs = F.softmax(logits, dim=-1)
                 dist = torch.distributions.Categorical(probs)
 
-                _, next_value = model(state_tensor)
+                _, next_value, _, _, _ = model(state_tensor)
                 advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
 
                 actor_loss = -dist.log_prob(action_tensor) * advantage.detach()
@@ -67,17 +77,21 @@ def train_a2c(features: np.ndarray) -> dict:
                 loss.backward()
                 optimizer.step()
 
+    # 輸出策略
     with torch.no_grad():
-        logits, _ = model(x)
+        logits, _, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
         confidence, selected = torch.max(probs, dim=-1)
+        tp = torch.sigmoid(tp_out).item() * 3.5
+        sl = torch.sigmoid(sl_out).item() * 2.0
+        leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     return {
         "model": "A2C",
         "direction": "Long" if selected.item() == 0 else "Short",
         "confidence": round(confidence.item(), 4),
-        "tp": tp,
-        "sl": sl,
-        "leverage": int(2 + 3 * confidence.item()),
+        "tp": round(tp, 2),
+        "sl": round(sl, 2),
+        "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4)
     }
