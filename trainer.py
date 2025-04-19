@@ -1,7 +1,7 @@
 # trainer.py
 import pandas as pd
 from datetime import datetime
-from features_engineer import compute_dual_features  # ✅ 換成雙週期版本
+from compute_dual_features import compute_dual_features  # ✅ 換成雙週期版本
 from fetch_market_data import fetch_market_data
 from ppo_trainer import train_ppo
 from a2c_trainer import train_a2c
