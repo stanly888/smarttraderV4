@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
-from replay_buffer import ReplayBuffer  # ✅ 引入 replay buffer
+from replay_buffer import ReplayBuffer
 
 # 超參數
 TRAIN_STEPS = 20
@@ -16,36 +16,42 @@ BATCH_SIZE = 8
 model = UnifiedRLModel(input_dim=10)
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
-replay_buffer = ReplayBuffer(capacity=1000)  # ✅ 建立 replay buffer
+replay_buffer = ReplayBuffer(capacity=1000)
 
-def simulate_reward(direction, confidence):
-    """模擬 TP/SL 命中與方向信心的 reward"""
-    if direction == "Long":
-        tp_hit = np.random.rand() < 0.4 + 0.5 * confidence
-        sl_hit = not tp_hit
+def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
+    """根據方向、TP、SL、槓桿模擬 reward，含手續費與資金費"""
+    hit = np.random.rand()
+    if hit < 0.5:
+        raw_profit = tp
     else:
-        tp_hit = np.random.rand() < 0.3 + 0.4 * confidence
-        sl_hit = not tp_hit
+        raw_profit = -sl
 
-    reward = 1.0 if tp_hit else -1.0
-    return reward, tp_hit, sl_hit
+    fee = 0.0004 * leverage * 2      # 假設開平倉總手續費 0.08%
+    funding = 0.00025 * leverage     # 資金費率
+    reward = raw_profit * leverage - fee - funding
+    return round(reward, 4)
 
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
-    # Step 1: 模擬動作與 reward
-    logits, value = model(x)
+    # Step 1: 取得模型輸出（包含五輸出）
+    logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
     dist = torch.distributions.Categorical(probs)
     action = dist.sample()
+
     direction = "Long" if action.item() == 0 else "Short"
     confidence = probs[0, action].item()
+    tp = torch.sigmoid(tp_out).item() * 3.5
+    sl = torch.sigmoid(sl_out).item() * 2.0
+    leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
-    reward_val, _, _ = simulate_reward(direction, confidence)
+    # Step 2: 模擬 reward
+    reward_val = simulate_reward(direction, tp, sl, leverage)
     reward = torch.tensor([reward_val], dtype=torch.float32)
     replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
 
-    # Step 2: 訓練階段（使用 replay buffer）
+    # Step 3: 訓練（使用 Replay Buffer）
     if len(replay_buffer) >= BATCH_SIZE:
         states, actions, rewards = replay_buffer.sample(BATCH_SIZE)
         states = torch.tensor(states, dtype=torch.float32)
@@ -53,12 +59,12 @@ def train_ppo(features: np.ndarray) -> dict:
         rewards = torch.tensor(rewards, dtype=torch.float32)
 
         for _ in range(TRAIN_STEPS):
-            logits, values = model(states)
+            logits, values, _, _, _ = model(states)
             dist = torch.distributions.Categorical(F.softmax(logits, dim=-1))
             log_probs = dist.log_prob(actions)
-            _, next_values = model(states)
-            advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
+            _, next_values, _, _, _ = model(states)
 
+            advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
             actor_loss = -(log_probs * advantages.detach()).mean()
             critic_loss = advantages.pow(2).mean()
             loss = actor_loss + critic_loss
@@ -67,25 +73,15 @@ def train_ppo(features: np.ndarray) -> dict:
             loss.backward()
             optimizer.step()
 
-    # Step 3: 輸出策略結果
-    with torch.no_grad():
-        logits, _ = model(x)
-        probs = F.softmax(logits, dim=-1)
-        confidence, action = torch.max(probs, dim=-1)
-
-    direction = "Long" if action.item() == 0 else "Short"
-    leverage = int(2 + 3 * confidence.item())
-    tp = round(1.5 + 2 * confidence.item(), 2)
-    sl = round(1.0 + 1 * (1 - confidence.item()), 2)
-
+    # Step 4: 儲存模型並輸出策略結果
     save_model(model, "ppo_model.pt")
 
     return {
         "model": "PPO",
         "direction": direction,
-        "confidence": confidence.item(),
-        "leverage": leverage,
-        "tp": tp,
-        "sl": sl,
-        "score": reward_val
+        "confidence": round(confidence, 4),
+        "leverage": int(leverage),
+        "tp": round(tp, 2),
+        "sl": round(sl, 2),
+        "score": round(reward_val, 4)
     }
