@@ -5,7 +5,6 @@ import logging
 from datetime import datetime
 from trainer import train_model
 from price_fetcher import get_current_price        # ✅ 從 price_fetcher 分離引用
-from order_executor import submit_order            # ✅ 保留送單模組
 from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
