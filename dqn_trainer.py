@@ -1,4 +1,34 @@
-# dqn_trainer.py（修改 train_dqn 部分）
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+import numpy as np
+import os
+from dqn_model import DQN, save_model, load_model_if_exists
+from replay_buffer import ReplayBuffer
+from reward_fetcher import get_real_reward
+
+# === 初始化模型、參數 ===
+model = DQN(input_dim=33)  # ✅ 升級為 33 維輸入
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+buffer = ReplayBuffer(capacity=1000)
+
+MODEL_PATH = "dqn_model.pt"
+BUFFER_PATH = "dqn_replay.json"
+
+load_model_if_exists(model, MODEL_PATH)
+buffer.load(BUFFER_PATH)
+
+TRAIN_STEPS = 20
+
+def simulate_reward(action: int, tp: float, sl: float, leverage: float) -> float:
+    if action == 2:
+        return np.random.uniform(-0.1, 0.2)
+    hit = np.random.rand()
+    raw = tp if hit < 0.5 else -sl
+    fee = 0.0004 * leverage * 2
+    funding = 0.00025 * leverage
+    return raw * leverage - fee - funding
+
 def train_dqn(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
@@ -9,22 +39,13 @@ def train_dqn(features: np.ndarray) -> dict:
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
-        # 根據模型輸出決定 TP/SL/Leverage
         tp = torch.sigmoid(tp_out).item() * 3.5
         sl = torch.sigmoid(sl_out).item() * 2.0
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
-            # 模擬 reward
-            if action == 2:
-                reward_val = np.random.uniform(-0.1, 0.2)
-            else:
-                hit = np.random.rand()
-                raw = tp if hit < 0.5 else -sl
-                fee = 0.0004 * leverage * 2
-                funding = 0.00025 * leverage
-                reward_val = raw * leverage - fee - funding
+            reward_val = simulate_reward(action, tp, sl, leverage)
 
         total_reward += reward_val
         buffer.push(x.squeeze(0).numpy(), action, reward_val)
@@ -43,7 +64,7 @@ def train_dqn(features: np.ndarray) -> dict:
             direction_logits, _, _, _ = model(states)
             q_vals = direction_logits
             q_target = q_vals.clone().detach()
-            for i in range(16):
+            for i in range(len(batch)):
                 q_target[i, actions[i]] = rewards[i]
 
             loss = F.mse_loss(q_vals, q_target)
@@ -52,7 +73,7 @@ def train_dqn(features: np.ndarray) -> dict:
             loss.backward()
             optimizer.step()
 
-    save_model(model)
+    save_model(model, MODEL_PATH)
     buffer.save(BUFFER_PATH)
 
     direction = "Long" if action == 0 else "Short" if action == 1 else "Skip"
