@@ -7,7 +7,7 @@ from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = ActorCritic(input_dim=20, action_dim=2)
+model = ActorCritic(input_dim=33, action_dim=2)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
