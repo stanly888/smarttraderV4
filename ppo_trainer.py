@@ -12,7 +12,7 @@ GAMMA = 0.99
 LR = 1e-3
 BATCH_SIZE = 8
 
-model = UnifiedRLModel(input_dim=34)  # ✅ 已升級為 34 維輸入
+model = UnifiedRLModel(input_dim=35)  # ✅ 已升級為 34 維輸入
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
