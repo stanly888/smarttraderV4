@@ -28,7 +28,7 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> fl
     funding = 0.00025 * leverage
     return round(raw * leverage - fee - funding, 4)
 
-def train_ppo(features: np.ndarray) -> dict:
+def train_ppo(features: np.ndarray, atr: float) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
     # 模型五輸出
@@ -39,8 +39,10 @@ def train_ppo(features: np.ndarray) -> dict:
 
     direction = "Long" if action.item() == 0 else "Short"
     confidence = probs[0, action].item()
-    tp = torch.sigmoid(tp_out).item() * 3.5
-    sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ SL 防呆
+
+    # ✅ TP/SL 預測比例 × ATR，無固定上限
+    tp = torch.sigmoid(tp_out).item() * atr
+    sl = torch.sigmoid(sl_out).item() * atr
     leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     reward_val, _, _ = get_real_reward()
