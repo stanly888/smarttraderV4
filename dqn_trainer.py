@@ -1,3 +1,4 @@
+# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -7,8 +8,7 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-# 初始化模型與優化器
-model = DQN(input_dim=33)
+model = DQN(input_dim=34)  # ✅ 升級為 34 維輸入
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
 
@@ -20,16 +20,23 @@ buffer.load(BUFFER_PATH)
 
 TRAIN_STEPS = 20
 
-def simulate_reward(action: int, tp: float, sl: float, leverage: float) -> float:
+def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     if action == 2:
         return np.random.uniform(-0.1, 0.2)
     raw = tp if np.random.rand() < 0.5 else -sl
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
-    return raw * leverage - fee - funding
+    base_reward = raw * leverage - fee - funding
+
+    # ✅ 依據斐波那契距離與 0.618 的接近程度調整 reward
+    fib_penalty = abs(fib_distance - 0.618)
+    adjusted_reward = base_reward * (1 - fib_penalty)
+    return adjusted_reward
 
 def train_dqn(features: np.ndarray) -> dict:
-    atr = max(features[3], 0.002)  # ✅ ATR 值取自 features[3]
+    atr = max(features[3], 0.002)
+    fib_distance = features[16]  # ✅ 斐波那契距離在第 17 維
+
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -45,7 +52,7 @@ def train_dqn(features: np.ndarray) -> dict:
 
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
-            reward_val = simulate_reward(action, tp, sl, leverage)
+            reward_val = simulate_reward(action, tp, sl, leverage, fib_distance)
 
         total_reward += reward_val
         buffer.push(x.squeeze(0).numpy(), action, reward_val)
@@ -82,7 +89,7 @@ def train_dqn(features: np.ndarray) -> dict:
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 3),
-        "tp": round(tp * 100, 2),  # 轉為百分比顯示
+        "tp": round(tp * 100, 2),
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4)
