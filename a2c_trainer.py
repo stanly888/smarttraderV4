@@ -20,8 +20,10 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> fl
     funding = 0.00025 * leverage
     return raw * leverage - fee - funding
 
-def train_a2c(features: np.ndarray, atr: float = 0.5) -> dict:
+def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+    atr = max(features[3], 0.002)  # ✅ 從特徵中擷取 ATR（第 4 維）
+
     total_reward = 0
 
     for _ in range(TRAIN_STEPS):
@@ -33,7 +35,7 @@ def train_a2c(features: np.ndarray, atr: float = 0.5) -> dict:
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
         tp = torch.sigmoid(tp_out).item() * atr
-        sl = max(torch.sigmoid(sl_out).item() * atr, 0.2)
+        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -83,15 +85,15 @@ def train_a2c(features: np.ndarray, atr: float = 0.5) -> dict:
         probs = F.softmax(logits, dim=-1)
         confidence, selected = torch.max(probs, dim=-1)
         tp = torch.sigmoid(tp_out).item() * atr
-        sl = max(torch.sigmoid(sl_out).item() * atr, 0.2)
+        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     return {
         "model": "A2C",
         "direction": "Long" if selected.item() == 0 else "Short",
         "confidence": round(confidence.item(), 4),
-        "tp": round(tp, 2),
-        "sl": round(sl, 2),
+        "tp": round(tp, 4),
+        "sl": round(sl, 4),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4)
     }
