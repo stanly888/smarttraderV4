@@ -29,7 +29,9 @@ def simulate_reward(action: int, tp: float, sl: float, leverage: float) -> float
     funding = 0.00025 * leverage
     return raw * leverage - fee - funding
 
-def train_dqn(features: np.ndarray, atr: float = 0.5) -> dict:
+def train_dqn(features: np.ndarray) -> dict:
+    # ✅ 自動使用 features[3] 的 ATR 值（加保底避免為 0）
+    atr = max(features[3], 0.002)
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -39,9 +41,9 @@ def train_dqn(features: np.ndarray, atr: float = 0.5) -> dict:
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
-        # ✅ TP/SL 預測為比例 × ATR
+        # ✅ 模型預測比例 × ATR
         tp = torch.sigmoid(tp_out).item() * atr
-        sl = torch.sigmoid(sl_out).item() * atr
+        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -83,8 +85,8 @@ def train_dqn(features: np.ndarray, atr: float = 0.5) -> dict:
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 3),
-        "tp": round(tp, 2),
-        "sl": round(sl, 2),
+        "tp": round(tp * 100, 2),
+        "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4)
     }
