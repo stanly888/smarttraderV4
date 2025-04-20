@@ -1,4 +1,3 @@
-# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -16,15 +15,12 @@ replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load("a2c_replay.json")
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
-    if np.random.rand() < 0.5:
-        raw = tp
-    else:
-        raw = -sl
+    raw = tp if np.random.rand() < 0.5 else -sl
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
     return raw * leverage - fee - funding
 
-def train_a2c(features: np.ndarray) -> dict:
+def train_a2c(features: np.ndarray, atr: float = 0.5) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -36,8 +32,8 @@ def train_a2c(features: np.ndarray) -> dict:
 
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
-        tp = torch.sigmoid(tp_out).item() * 3.5
-        sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ 設定 SL 最小值
+        tp = torch.sigmoid(tp_out).item() * atr
+        sl = max(torch.sigmoid(sl_out).item() * atr, 0.2)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -86,8 +82,8 @@ def train_a2c(features: np.ndarray) -> dict:
         logits, _, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
         confidence, selected = torch.max(probs, dim=-1)
-        tp = torch.sigmoid(tp_out).item() * 3.5
-        sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ 最後輸出也防呆
+        tp = torch.sigmoid(tp_out).item() * atr
+        sl = max(torch.sigmoid(sl_out).item() * atr, 0.2)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     return {
