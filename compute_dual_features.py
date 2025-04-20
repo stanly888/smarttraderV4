@@ -34,13 +34,21 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float]:
     # 原始 ATR 值（不標準化，留給 TP/SL 使用）
     raw_atr = atr.iloc[-1]
 
+    # ✅ 斐波那契回撤支撐壓力特徵
+    recent_high = high[-20:].max()
+    recent_low = low[-20:].min()
+    fib_levels = [recent_high - (recent_high - recent_low) * r for r in [0.236, 0.382, 0.5, 0.618, 0.786]]
+    fib_distances = [abs(close.iloc[-1] - level) for level in fib_levels]
+    fib_mean_dist = np.mean(fib_distances)
+
     # 標準化特徵（用於模型輸入）
     features = np.array([
         vwap_diff.iloc[-1], obv.iloc[-1], mfi.iloc[-1], atr.iloc[-1],
         bb_width.iloc[-1], price_pos.iloc[-1], ma_diff.iloc[-1],
         rsi.iloc[-1], price_chg.iloc[-1], vol_chg.iloc[-1],
         atr_ratio.iloc[-1], rsi_zone.iloc[-1], bb_pct.iloc[-1],
-        bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1]
+        bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1],
+        fib_mean_dist  # ✅ 第 17 維：斐波那契距離
     ])
 
     normalized = np.nan_to_num((features - features.mean()) / (features.std() + 1e-6))
@@ -54,5 +62,5 @@ def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, float]:
     features_1h, _ = compute_single_features(df_1h)
     current_price = df_15m["close"].iloc[-1]
 
-    dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 共 33 維
-    return dual_features, atr_15m  # ✅ 傳回標準化特徵 + 原始 ATR 值
+    dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 共 34 維（17 + 16 + 1）
+    return dual_features, atr_15m
