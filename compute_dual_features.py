@@ -1,3 +1,4 @@
+# compute_dual_features.py
 import pandas as pd
 import numpy as np
 from ta.volume import OnBalanceVolumeIndicator, MFIIndicator
@@ -29,24 +30,22 @@ def compute_single_features(df: pd.DataFrame) -> np.ndarray:
     bb_pct = price_pos
     bb_dev = bb_width / close
     ma_slope = ma5.diff()
-    # ✅ 拿掉 volatility，確保單周期為 16 維
 
     features = np.array([
         vwap_diff.iloc[-1], obv.iloc[-1], mfi.iloc[-1], atr.iloc[-1],
         bb_width.iloc[-1], price_pos.iloc[-1], ma_diff.iloc[-1],
         rsi.iloc[-1], price_chg.iloc[-1], vol_chg.iloc[-1],
         atr_ratio.iloc[-1], rsi_zone.iloc[-1], bb_pct.iloc[-1],
-        bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1]  # 加入 close 當第 16 維
+        bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1]  # ✅ 確保單週期為 16 維
     ])
-
     return np.nan_to_num((features - features.mean()) / (features.std() + 1e-6))
 
 def compute_dual_features(symbol="BTC-USDT") -> np.ndarray:
     df_15m = fetch_market_data(symbol=symbol, interval="15m", limit=100)
     df_1h = fetch_market_data(symbol=symbol, interval="1h", limit=100)
 
-    features_15m = compute_single_features(df_15m)
-    features_1h = compute_single_features(df_1h)
+    features_15m = compute_single_features(df_15m)  # 16 維
+    features_1h = compute_single_features(df_1h)    # 16 維
+    current_price = df_15m["close"].iloc[-1]        # ✅ 取最後一筆 close 作為第 33 維補強特徵
 
-    result = np.concatenate([features_15m, features_1h])  # 共 33 維
-    return result
+    return np.concatenate([features_15m, features_1h, [current_price]])  # ✅ 最終為 33 維
