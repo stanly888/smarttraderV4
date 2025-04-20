@@ -12,7 +12,6 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
 
-# ✅ 初始化並嘗試載入 replay buffer
 replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load("a2c_replay.json")
 
@@ -38,7 +37,7 @@ def train_a2c(features: np.ndarray) -> dict:
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
         tp = torch.sigmoid(tp_out).item() * 3.5
-        sl = torch.sigmoid(sl_out).item() * 2.0
+        sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ 設定 SL 最小值
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -81,7 +80,6 @@ def train_a2c(features: np.ndarray) -> dict:
                 loss.backward()
                 optimizer.step()
 
-    # ✅ 訓練後儲存 replay buffer
     replay_buffer.save("a2c_replay.json")
 
     with torch.no_grad():
@@ -89,7 +87,7 @@ def train_a2c(features: np.ndarray) -> dict:
         probs = F.softmax(logits, dim=-1)
         confidence, selected = torch.max(probs, dim=-1)
         tp = torch.sigmoid(tp_out).item() * 3.5
-        sl = torch.sigmoid(sl_out).item() * 2.0
+        sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ 最後輸出也防呆
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     return {
