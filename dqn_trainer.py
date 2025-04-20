@@ -8,7 +8,7 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = DQN(input_dim=34)  # ✅ 升級為 34 維輸入
+model = DQN(input_dim=35)  # ✅ 升級為 34 維輸入
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
 
