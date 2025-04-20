@@ -7,30 +7,34 @@ from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-# 超參數
 TRAIN_STEPS = 20
 GAMMA = 0.99
 LR = 1e-3
 BATCH_SIZE = 8
 
-# 初始化模型與 optimizer
-model = UnifiedRLModel(input_dim=33)
+model = UnifiedRLModel(input_dim=34)  # ✅ 已升級為 34 維輸入
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
 replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load("ppo_replay.json")
 
-def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
+def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     hit = np.random.rand()
     raw = tp if hit < 0.5 else -sl
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
-    return round(raw * leverage - fee - funding, 4)
+    base_reward = raw * leverage - fee - funding
+
+    # ✅ 偏好斐波那契距離越接近 0.618 的預測
+    fib_penalty = abs(fib_distance - 0.618)
+    adjusted_reward = base_reward * (1 - fib_penalty)
+    return round(adjusted_reward, 4)
 
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    atr = max(features[3], 0.002)  # ✅ 使用 ATR 值為 TP/SL 基礎（第 4 維）
+    atr = max(features[3], 0.002)
+    fib_distance = features[16]  # ✅ 第 17 維是斐波那契距離
 
     logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
@@ -46,7 +50,7 @@ def train_ppo(features: np.ndarray) -> dict:
 
     reward_val, _, _ = get_real_reward()
     if reward_val is None:
-        reward_val = simulate_reward(direction, tp, sl, leverage)
+        reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
 
     reward = torch.tensor([reward_val], dtype=torch.float32)
     replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
