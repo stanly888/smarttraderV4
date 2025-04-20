@@ -31,6 +31,10 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float]:
     bb_dev = bb_width / close
     ma_slope = ma5.diff()
 
+    # 原始 ATR 值（不標準化，留給 TP/SL 使用）
+    raw_atr = atr.iloc[-1]
+
+    # 標準化特徵（用於模型輸入）
     features = np.array([
         vwap_diff.iloc[-1], obv.iloc[-1], mfi.iloc[-1], atr.iloc[-1],
         bb_width.iloc[-1], price_pos.iloc[-1], ma_diff.iloc[-1],
@@ -38,8 +42,9 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float]:
         atr_ratio.iloc[-1], rsi_zone.iloc[-1], bb_pct.iloc[-1],
         bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1]
     ])
-    atr_value = atr.iloc[-1]
-    return np.nan_to_num((features - features.mean()) / (features.std() + 1e-6)), atr_value
+
+    normalized = np.nan_to_num((features - features.mean()) / (features.std() + 1e-6))
+    return normalized, raw_atr
 
 def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, float]:
     df_15m = fetch_market_data(symbol=symbol, interval="15m", limit=100)
@@ -50,4 +55,4 @@ def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, float]:
     current_price = df_15m["close"].iloc[-1]
 
     dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 共 33 維
-    return dual_features, atr_15m  # ✅ 回傳特徵 + ATR
+    return dual_features, atr_15m  # ✅ 傳回標準化特徵 + 原始 ATR 值
