@@ -1,3 +1,4 @@
+# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -40,7 +41,7 @@ def train_dqn(features: np.ndarray) -> dict:
         confidence = probs[0, action].item()
 
         tp = torch.sigmoid(tp_out).item() * 3.5
-        sl = torch.sigmoid(sl_out).item() * 2.0
+        sl = max(torch.sigmoid(sl_out).item() * 2.0, 0.2)  # ✅ SL 防呆：至少 0.2%
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
