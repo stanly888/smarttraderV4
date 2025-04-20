@@ -1,4 +1,3 @@
-# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -8,6 +7,7 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
+# 初始化模型與優化器
 model = DQN(input_dim=33)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
@@ -23,15 +23,13 @@ TRAIN_STEPS = 20
 def simulate_reward(action: int, tp: float, sl: float, leverage: float) -> float:
     if action == 2:
         return np.random.uniform(-0.1, 0.2)
-    hit = np.random.rand()
-    raw = tp if hit < 0.5 else -sl
+    raw = tp if np.random.rand() < 0.5 else -sl
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
     return raw * leverage - fee - funding
 
 def train_dqn(features: np.ndarray) -> dict:
-    # ✅ 自動使用 features[3] 的 ATR 值（加保底避免為 0）
-    atr = max(features[3], 0.002)
+    atr = max(features[3], 0.002)  # ✅ ATR 值取自 features[3]
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -41,7 +39,6 @@ def train_dqn(features: np.ndarray) -> dict:
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
-        # ✅ 模型預測比例 × ATR
         tp = torch.sigmoid(tp_out).item() * atr
         sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
@@ -85,7 +82,7 @@ def train_dqn(features: np.ndarray) -> dict:
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 3),
-        "tp": round(tp * 100, 2),
+        "tp": round(tp * 100, 2),  # 轉為百分比顯示
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4)
