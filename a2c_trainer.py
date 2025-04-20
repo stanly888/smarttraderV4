@@ -1,3 +1,4 @@
+# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -6,7 +7,7 @@ from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = ActorCritic(input_dim=33, action_dim=2)
+model = ActorCritic(input_dim=34, action_dim=2)  # ✅ 升級為 34 維輸入
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
@@ -22,7 +23,7 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> fl
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    atr = max(features[3], 0.002)  # ✅ 從特徵中擷取 ATR（第 4 維）
+    atr = max(features[3], 0.002)  # ✅ 從第 4 維（未標準化 ATR）擷取 ATR 值
 
     total_reward = 0
 
