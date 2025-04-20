@@ -28,10 +28,10 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> fl
     funding = 0.00025 * leverage
     return round(raw * leverage - fee - funding, 4)
 
-def train_ppo(features: np.ndarray, atr: float) -> dict:
+def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+    atr = max(features[3], 0.002)  # ✅ 使用 ATR 值為 TP/SL 基礎（第 4 維）
 
-    # 模型五輸出
     logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
     dist = torch.distributions.Categorical(probs)
@@ -40,9 +40,8 @@ def train_ppo(features: np.ndarray, atr: float) -> dict:
     direction = "Long" if action.item() == 0 else "Short"
     confidence = probs[0, action].item()
 
-    # ✅ TP/SL 預測比例 × ATR，無固定上限
     tp = torch.sigmoid(tp_out).item() * atr
-    sl = torch.sigmoid(sl_out).item() * atr
+    sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
     leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     reward_val, _, _ = get_real_reward()
@@ -81,7 +80,7 @@ def train_ppo(features: np.ndarray, atr: float) -> dict:
         "direction": direction,
         "confidence": round(confidence, 4),
         "leverage": int(leverage),
-        "tp": round(tp, 2),
-        "sl": round(sl, 2),
+        "tp": round(tp, 4),
+        "sl": round(sl, 4),
         "score": round(reward_val, 4)
     }
