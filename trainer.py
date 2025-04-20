@@ -1,7 +1,7 @@
 # trainer.py
 import pandas as pd
 from datetime import datetime
-from compute_dual_features import compute_dual_features  # ✅ 已支援回傳 ATR
+from compute_dual_features import compute_dual_features  # ✅ 只回傳 features (33維)
 from fetch_market_data import fetch_market_data
 from ppo_trainer import train_ppo
 from a2c_trainer import train_a2c
@@ -12,21 +12,23 @@ def train_model():
     source = "實盤資料"
 
     try:
-        # ✅ 抓取雙週期特徵與 ATR 值
-        features, atr = compute_dual_features("BTC-USDT")
+        # ✅ 抓取雙週期特徵（33維）
+        features = compute_dual_features("BTC-USDT")
     except Exception as e:
         print(f"❌ 無法取得實盤資料或計算特徵：{e}")
         return {"status": "error", "message": str(e)}
 
+    # ✅ 檢查特徵有效性
     if features is None or not features.any():
         print("⚠️ 雙週期技術指標異常，略過此次訓練")
         return {"status": "error", "message": "技術指標異常，無有效數據"}
 
-    # ✅ 傳入 features 與 atr 給各模型訓練模組
-    result_ppo = train_ppo(features, atr)
-    result_a2c = train_a2c(features, atr)
-    result_dqn = train_dqn(features, atr)
+    # ✅ 傳入 features 給各模型訓練（內部自取 ATR）
+    result_ppo = train_ppo(features)
+    result_a2c = train_a2c(features)
+    result_dqn = train_dqn(features)
 
+    # ✅ 選出最佳模型
     best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
 
     if "model" not in best or "confidence" not in best or "score" not in best:
@@ -36,6 +38,7 @@ def train_model():
             "raw": best
         }
 
+    # ✅ 記錄結果
     record_retrain_status(best["model"], best["score"], best["confidence"])
 
     best["timestamp"] = datetime.utcnow().isoformat()
