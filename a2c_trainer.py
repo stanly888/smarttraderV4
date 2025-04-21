@@ -27,6 +27,7 @@ def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     atr = max(features[3], 0.002)
     fib_distance = features[16]
+    bb_width = features[4]
 
     total_reward = 0
 
@@ -38,8 +39,10 @@ def train_a2c(features: np.ndarray) -> dict:
 
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
-        tp = torch.sigmoid(tp_out).item() * atr
-        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
+
+        fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
+        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
+        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -48,7 +51,6 @@ def train_a2c(features: np.ndarray) -> dict:
 
         total_reward += reward_val
 
-        # ✅ 用完整 add() 方法寫入 buffer
         replay_buffer.add(
             state=x.squeeze(0).numpy(),
             action=action.item(),
@@ -99,8 +101,10 @@ def train_a2c(features: np.ndarray) -> dict:
         logits, _, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
         confidence, selected = torch.max(probs, dim=-1)
-        tp = torch.sigmoid(tp_out).item() * atr
-        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
+
+        fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
+        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
+        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     return {
