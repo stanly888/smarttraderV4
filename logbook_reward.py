@@ -1,24 +1,23 @@
-# logbook_reward.py
 import json
 from datetime import datetime
 import os
 import numpy as np
+import random
 
-def simulate_trade_outcome(result: dict) -> float:
+def simulate_trade_outcome(result: dict) -> tuple[float, str]:
     """
-    根據模型輸出模擬是否命中 TP / SL 並產生 reward。
+    根據模型輸出模擬是否命中 TP / SL 並產生 reward 與類型（TP / SL / None）
     """
-    import random
-    outcome = random.choices(["tp", "sl", "none"], weights=[0.45, 0.3, 0.25])[0]
+    outcome = random.choices(["TP", "SL", "None"], weights=[0.45, 0.3, 0.25])[0]
     leverage = result.get("leverage", 1)
     reward = 0.0
 
-    if outcome == "tp":
+    if outcome == "TP":
         reward = result["tp"] / 100 * leverage
-    elif outcome == "sl":
+    elif outcome == "SL":
         reward = -result["sl"] / 100 * leverage
 
-    return round(float(reward), 4)
+    return round(float(reward), 4), outcome
 
 def convert_numpy(obj):
     """處理 numpy 型別轉換為 Python 原生型別以供 JSON 存儲。"""
@@ -32,9 +31,10 @@ def convert_numpy(obj):
 
 def log_reward_result(result: dict):
     """
-    將 reward 紀錄進 logbook_rewards.json
+    將 reward 紀錄進 logbook_reward.json
     """
-    reward = simulate_trade_outcome(result)
+    reward, outcome = simulate_trade_outcome(result)
+
     entry = {
         "timestamp": result.get("timestamp", datetime.utcnow().isoformat()),
         "model": result["model"],
@@ -43,10 +43,11 @@ def log_reward_result(result: dict):
         "tp": result["tp"],
         "sl": result["sl"],
         "leverage": result["leverage"],
-        "reward": reward
+        "reward": reward,
+        "reward_type": outcome
     }
 
-    log_file = "logbook_rewards.json"
+    log_file = "logbook_reward.json"
     logs = []
     if os.path.exists(log_file):
         with open(log_file, "r") as f:
