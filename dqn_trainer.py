@@ -8,7 +8,7 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = DQN(input_dim=35)  # ✅ 升級為 35 維輸入
+model = DQN(input_dim=35)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
 
@@ -33,6 +33,8 @@ def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_dist
 def train_dqn(features: np.ndarray) -> dict:
     atr = max(features[3], 0.002)
     fib_distance = features[16]
+    bb_width = features[4]
+
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -42,8 +44,10 @@ def train_dqn(features: np.ndarray) -> dict:
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
-        tp = torch.sigmoid(tp_out).item() * atr
-        sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
+        # ✅ 綜合 fib + bb + atr 計算 TP/SL 實際距離
+        fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
+        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
+        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
         leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
         reward_val, _, _ = get_real_reward()
@@ -52,12 +56,11 @@ def train_dqn(features: np.ndarray) -> dict:
 
         total_reward += reward_val
 
-        # ✅ 使用新的 add 方法寫入 ReplayBuffer
         buffer.add(
             state=x.squeeze(0).numpy(),
             action=action,
             reward=reward_val,
-            next_state=x.squeeze(0).numpy(),  # 暫不使用真實 next_state
+            next_state=x.squeeze(0).numpy(),
             done=False
         )
 
