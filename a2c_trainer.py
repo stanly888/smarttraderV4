@@ -7,7 +7,7 @@ from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = ActorCritic(input_dim=35, action_dim=2)  # ✅ 升級為 34 維輸入
+model = ActorCritic(input_dim=35, action_dim=2)  # ✅ 升級為 35 維輸入
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
@@ -15,15 +15,18 @@ GAMMA = 0.99
 replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load("a2c_replay.json")
 
-def simulate_reward(direction: str, tp: float, sl: float, leverage: float) -> float:
+def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     raw = tp if np.random.rand() < 0.5 else -sl
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
-    return raw * leverage - fee - funding
+    base = raw * leverage - fee - funding
+    fib_penalty = abs(fib_distance - 0.618)
+    return base * (1 - fib_penalty)
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    atr = max(features[3], 0.002)  # ✅ 從第 4 維（未標準化 ATR）擷取 ATR 值
+    atr = max(features[3], 0.002)
+    fib_distance = features[16]
 
     total_reward = 0
 
@@ -41,7 +44,7 @@ def train_a2c(features: np.ndarray) -> dict:
 
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
-            reward_val = simulate_reward(direction, tp, sl, leverage)
+            reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
 
         total_reward += reward_val
         replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
@@ -57,9 +60,12 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
+    # 經驗回放訓練
     if len(replay_buffer) >= 5:
         for _ in range(3):
             batch = replay_buffer.sample(5)
+            if batch is None:
+                continue
             for state, action, reward in zip(*batch[:3]):
                 state_tensor = torch.tensor(state, dtype=torch.float32)
                 action_tensor = torch.tensor(action, dtype=torch.int64)
