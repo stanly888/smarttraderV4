@@ -8,7 +8,7 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = DQN(input_dim=35)  # ✅ 升級為 34 維輸入
+model = DQN(input_dim=35)  # ✅ 升級為 35 維輸入
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 buffer = ReplayBuffer(capacity=1000)
 
@@ -27,16 +27,12 @@ def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_dist
     fee = 0.0004 * leverage * 2
     funding = 0.00025 * leverage
     base_reward = raw * leverage - fee - funding
-
-    # ✅ 依據斐波那契距離與 0.618 的接近程度調整 reward
     fib_penalty = abs(fib_distance - 0.618)
-    adjusted_reward = base_reward * (1 - fib_penalty)
-    return adjusted_reward
+    return round(base_reward * (1 - fib_penalty), 4)
 
 def train_dqn(features: np.ndarray) -> dict:
     atr = max(features[3], 0.002)
-    fib_distance = features[16]  # ✅ 斐波那契距離在第 17 維
-
+    fib_distance = features[16]
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -55,23 +51,33 @@ def train_dqn(features: np.ndarray) -> dict:
             reward_val = simulate_reward(action, tp, sl, leverage, fib_distance)
 
         total_reward += reward_val
-        buffer.push(x.squeeze(0).numpy(), action, reward_val)
+
+        # ✅ 使用新的 add 方法寫入 ReplayBuffer
+        buffer.add(
+            state=x.squeeze(0).numpy(),
+            action=action,
+            reward=reward_val,
+            next_state=x.squeeze(0).numpy(),  # 暫不使用真實 next_state
+            done=False
+        )
 
         if len(buffer) > 16:
             batch = buffer.sample(16)
+            if batch is None:
+                continue
             try:
-                states = torch.tensor(np.stack([np.array(b[0]).flatten() for b in batch]), dtype=torch.float32)
+                states, actions, rewards, _, _ = batch
+                states = torch.tensor(states, dtype=torch.float32)
+                actions = torch.tensor(actions, dtype=torch.long)
+                rewards = torch.tensor(rewards, dtype=torch.float32)
             except ValueError as e:
                 print(f"[警告] DQN 回放失敗，state shape 不一致：{e}")
                 continue
 
-            actions = torch.tensor([b[1] for b in batch], dtype=torch.long)
-            rewards = torch.tensor([b[2] for b in batch], dtype=torch.float32)
-
             direction_logits, _, _, _ = model(states)
             q_vals = direction_logits
             q_target = q_vals.clone().detach()
-            for i in range(len(batch)):
+            for i in range(len(rewards)):
                 q_target[i, actions[i]] = rewards[i]
 
             loss = F.mse_loss(q_vals, q_target)
@@ -92,5 +98,6 @@ def train_dqn(features: np.ndarray) -> dict:
         "tp": round(tp * 100, 2),
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
-        "score": round(total_reward / TRAIN_STEPS, 4)
+        "score": round(total_reward / TRAIN_STEPS, 4),
+        "fib_distance": round(fib_distance, 4)
     }
