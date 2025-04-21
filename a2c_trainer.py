@@ -7,7 +7,7 @@ from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = ActorCritic(input_dim=35, action_dim=2)  # ✅ 升級為 35 維輸入
+model = ActorCritic(input_dim=35, action_dim=2)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 TRAIN_STEPS = 20
 GAMMA = 0.99
@@ -21,7 +21,7 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_d
     funding = 0.00025 * leverage
     base = raw * leverage - fee - funding
     fib_penalty = abs(fib_distance - 0.618)
-    return base * (1 - fib_penalty)
+    return round(base * (1 - fib_penalty), 4)
 
 def train_a2c(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
@@ -47,7 +47,15 @@ def train_a2c(features: np.ndarray) -> dict:
             reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
 
         total_reward += reward_val
-        replay_buffer.push(x.squeeze(0).numpy(), action.item(), reward_val)
+
+        # ✅ 用完整 add() 方法寫入 buffer
+        replay_buffer.add(
+            state=x.squeeze(0).numpy(),
+            action=action.item(),
+            reward=reward_val,
+            next_state=x.squeeze(0).numpy(),
+            done=False
+        )
 
         _, next_value, _, _, _ = model(x)
         advantage = torch.tensor([reward_val], dtype=torch.float32) + GAMMA * next_value - value
@@ -60,13 +68,13 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    # 經驗回放訓練
     if len(replay_buffer) >= 5:
         for _ in range(3):
             batch = replay_buffer.sample(5)
             if batch is None:
                 continue
-            for state, action, reward in zip(*batch[:3]):
+            states, actions, rewards, _, _ = batch
+            for state, action, reward in zip(states, actions, rewards):
                 state_tensor = torch.tensor(state, dtype=torch.float32)
                 action_tensor = torch.tensor(action, dtype=torch.int64)
 
@@ -102,5 +110,6 @@ def train_a2c(features: np.ndarray) -> dict:
         "tp": round(tp, 4),
         "sl": round(sl, 4),
         "leverage": int(leverage),
-        "score": round(total_reward / TRAIN_STEPS, 4)
+        "score": round(total_reward / TRAIN_STEPS, 4),
+        "fib_distance": round(fib_distance, 4)
     }
