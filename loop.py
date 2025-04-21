@@ -4,7 +4,7 @@ import os
 import logging
 from datetime import datetime
 from trainer import train_model
-from price_fetcher import get_current_price  # ✅ 改為從這裡引入
+from price_fetcher import get_current_price
 from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
@@ -77,7 +77,13 @@ while True:
             record_retrain_status(result['model'], result['score'], result['confidence'])
             log_reward_result(result)
             send_strategy_update(result)
-            logging.info(f"✅ 已完成訓練與推播：{result['model']} | 信心={result['confidence']:.2f} | TP={result['tp']}% SL={result['sl']}%")
+
+            # 顯示 TP/SL 百分比格式與斐波那契距離（如有）
+            fib_str = f" | Fib={round(result['fib_distance'], 3)}" if "fib_distance" in result else ""
+            logging.info(
+                f"✅ 已完成訓練與推播：{result['model']} | 信心={result['confidence']:.2f} "
+                f"| TP={result['tp'] * 100:.2f}% SL={result['sl'] * 100:.2f}%{fib_str}"
+            )
         else:
             logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
 
