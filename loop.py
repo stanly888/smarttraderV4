@@ -9,6 +9,7 @@ from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
 from logbook_reward import log_reward_result
+from order_executor import submit_order  # ✅ 加入模擬送單模組
 
 TRADES_FILE = "real_trades.json"
 
@@ -65,6 +66,7 @@ def check_open_trades():
     except Exception as e:
         logging.warning(f"❌ 檢查 open trades 錯誤：{e}")
 
+# === 主迴圈 ===
 while True:
     now = time.localtime()
     check_open_trades()
@@ -78,12 +80,21 @@ while True:
             log_reward_result(result)
             send_strategy_update(result)
 
-            # 顯示 TP/SL 百分比格式與斐波那契距離（如有）
             fib_str = f" | Fib={round(result['fib_distance'], 3)}" if "fib_distance" in result else ""
             logging.info(
                 f"✅ 已完成訓練與推播：{result['model']} | 信心={result['confidence']:.2f} "
                 f"| TP={result['tp'] * 100:.2f}% SL={result['sl'] * 100:.2f}%{fib_str}"
             )
+
+            # ✅ 加入送單
+            submit_order(
+                direction=result['direction'],
+                tp_pct=result['tp'],
+                sl_pct=result['sl'],
+                leverage=result['leverage'],
+                confidence=result['confidence']
+            )
+
         else:
             logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
 
