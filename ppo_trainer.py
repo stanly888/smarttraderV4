@@ -12,7 +12,7 @@ GAMMA = 0.99
 LR = 1e-3
 BATCH_SIZE = 8
 
-model = UnifiedRLModel(input_dim=35)  # ✅ 升級為含 ATR/Fib/Price 共 35 維
+model = UnifiedRLModel(input_dim=35)
 load_model_if_exists(model, "ppo_model.pt")
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
@@ -30,8 +30,10 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_d
 
 def train_ppo(features: np.ndarray) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+
     atr = max(features[3], 0.002)
     fib_distance = features[16]
+    bb_width = features[4]
 
     logits, value, tp_out, sl_out, lev_out = model(x)
     probs = F.softmax(logits, dim=-1)
@@ -40,15 +42,17 @@ def train_ppo(features: np.ndarray) -> dict:
 
     direction = "Long" if action.item() == 0 else "Short"
     confidence = probs[0, action].item()
-    tp = torch.sigmoid(tp_out).item() * atr
-    sl = max(torch.sigmoid(sl_out).item() * atr, 0.002)
+
+    # ✅ 綜合斐波那契偏好 + BB寬度 + ATR，計算 TP/SL 實際價格區間
+    fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
+    tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
+    sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
     leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
     reward_val, _, _ = get_real_reward()
     if reward_val is None:
         reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
 
-    # ✅ 新 ReplayBuffer 結構：加入 next_state & done
     replay_buffer.add(
         state=x.squeeze(0).numpy(),
         action=action.item(),
