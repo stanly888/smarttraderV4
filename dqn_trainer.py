@@ -1,3 +1,4 @@
+# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -7,13 +8,14 @@ from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = DQN(input_dim=35)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
 MODEL_PATH = "dqn_model.pt"
 BUFFER_PATH = "dqn_replay.json"
 TRAIN_STEPS = 20
 BATCH_SIZE = 16
+LR = 1e-3
+
+model = DQN(input_dim=35)
+optimizer = optim.Adam(model.parameters(), lr=LR)
 
 load_model_if_exists(model, MODEL_PATH)
 print("✅ DQN 模型已載入")
