@@ -1,6 +1,7 @@
 # order_executor.py
 import json
 import os
+import uuid
 from datetime import datetime
 from price_fetcher import get_current_price
 
@@ -20,6 +21,7 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
     sl_price = price * (1 - sl_pct) if direction == "Long" else price * (1 + sl_pct)
 
     trade = {
+        "id": str(uuid.uuid4()),  # ✅ 唯一交易識別碼
         "timestamp": datetime.utcnow().isoformat(),
         "direction": direction,
         "confidence": round(confidence, 4),
@@ -29,7 +31,8 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
         "leverage": int(leverage),
         "tp_price": round(tp_price, 2),
         "sl_price": round(sl_price, 2),
-        "status": "open"
+        "status": "open",
+        "rewarded": False         # ✅ 預設未領取 reward
     }
 
     trades = []
