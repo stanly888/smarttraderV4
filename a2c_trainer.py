@@ -1,19 +1,30 @@
-# a2c_trainer.py
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import os
 from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
 
-model = ActorCritic(input_dim=35, action_dim=2)
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+MODEL_PATH = "a2c_model.pt"
+REPLAY_PATH = "a2c_replay.json"
 TRAIN_STEPS = 20
 GAMMA = 0.99
+LR = 1e-3
+BATCH_SIZE = 5
 
+model = ActorCritic(input_dim=35, action_dim=2)
+optimizer = optim.Adam(model.parameters(), lr=LR)
+
+# ✅ 載入模型（若存在）
+if os.path.exists(MODEL_PATH):
+    model.load_state_dict(torch.load(MODEL_PATH))
+    print("✅ A2C 模型已載入")
+
+# ✅ 載入 Replay Buffer（若存在）
 replay_buffer = ReplayBuffer(capacity=1000)
-replay_buffer.load("a2c_replay.json")
+replay_buffer.load(REPLAY_PATH)
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     raw = tp if np.random.rand() < 0.5 else -sl
@@ -70,32 +81,34 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    if len(replay_buffer) >= 5:
+    # ✅ Replay 記憶訓練
+    if len(replay_buffer) >= BATCH_SIZE:
         for _ in range(3):
-            batch = replay_buffer.sample(5)
-            if batch is None:
-                continue
-            states, actions, rewards, _, _ = batch
-            for state, action, reward in zip(states, actions, rewards):
-                state_tensor = torch.tensor(state, dtype=torch.float32)
-                action_tensor = torch.tensor(action, dtype=torch.int64)
+            try:
+                states, actions, rewards, _, _ = replay_buffer.sample(BATCH_SIZE)
+                states = torch.tensor(states, dtype=torch.float32)
+                actions = torch.tensor(actions, dtype=torch.int64)
+                rewards = torch.tensor(rewards, dtype=torch.float32)
 
-                logits, value, _, _, _ = model(state_tensor)
-                probs = F.softmax(logits, dim=-1)
-                dist = torch.distributions.Categorical(probs)
+                logits, values, _, _, _ = model(states)
+                dist = torch.distributions.Categorical(F.softmax(logits, dim=-1))
+                log_probs = dist.log_prob(actions)
+                _, next_values, _, _, _ = model(states)
 
-                _, next_value, _, _, _ = model(state_tensor)
-                advantage = torch.tensor([reward], dtype=torch.float32) + GAMMA * next_value - value
-
-                actor_loss = -dist.log_prob(action_tensor) * advantage.detach()
-                critic_loss = advantage.pow(2)
+                advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
+                actor_loss = -(log_probs * advantages.detach()).mean()
+                critic_loss = advantages.pow(2).mean()
                 loss = actor_loss + critic_loss
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+            except Exception as e:
+                print(f"⚠️ A2C 回放訓練失敗：{e}")
 
-    replay_buffer.save("a2c_replay.json")
+    # ✅ 儲存模型與記憶
+    torch.save(model.state_dict(), MODEL_PATH)
+    replay_buffer.save(REPLAY_PATH)
 
     with torch.no_grad():
         logits, _, tp_out, sl_out, lev_out = model(x)
@@ -111,8 +124,8 @@ def train_a2c(features: np.ndarray) -> dict:
         "model": "A2C",
         "direction": "Long" if selected.item() == 0 else "Short",
         "confidence": round(confidence.item(), 4),
-        "tp": round(tp, 4),
-        "sl": round(sl, 4),
+        "tp": round(tp * 100, 2),  # ✅ 轉為百分比
+        "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
         "fib_distance": round(fib_distance, 4)
