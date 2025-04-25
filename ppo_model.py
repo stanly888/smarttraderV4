@@ -1,10 +1,9 @@
-# ppo_model.py（升級版）
 import torch
 import torch.nn as nn
 import os
 
 class UnifiedRLModel(nn.Module):
-    def __init__(self, input_dim=33, hidden_dim=64):  # ✅ input_dim 改為 33
+    def __init__(self, input_dim=35, hidden_dim=64):  # ✅ input_dim 改為 35（最新雙週期特徵 + fib + 價格）
         super(UnifiedRLModel, self).__init__()
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
