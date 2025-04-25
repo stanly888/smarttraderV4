@@ -1,3 +1,4 @@
+# metrics.py
 import json
 import os
 from datetime import datetime
@@ -6,33 +7,40 @@ LOGBOOK_FILE = "logbook_reward.json"
 
 def analyze_daily_log() -> dict:
     if not os.path.exists(LOGBOOK_FILE):
-        return {"message": "無法分析，找不到日誌檔案"}
+        return {"message": "❌ 找不到 logbook_reward.json"}
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    with open(LOGBOOK_FILE, "r") as f:
-        data = json.load(f)
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    try:
+        with open(LOGBOOK_FILE, "r") as f:
+            all_logs = json.load(f)
+    except Exception as e:
+        return {"message": f"❌ 無法讀取 reward 日誌：{e}"}
 
-    today_logs = [entry for entry in data if entry.get("timestamp", "").startswith(today)]
+    today_logs = [log for log in all_logs if log.get("timestamp", "").startswith(today_str)]
     if not today_logs:
-        return {"message": "今天尚無資料"}
+        return {"message": "⚠️ 今日尚無交易紀錄"}
 
     total_trades = len(today_logs)
-    wins = sum(1 for x in today_logs if x["reward"] > 0)
-    tps = sum(1 for x in today_logs if x["reward_type"] == "TP")
-    sls = sum(1 for x in today_logs if x["reward_type"] == "SL")
-    avg_conf = sum(x["confidence"] for x in today_logs) / total_trades
-    std_conf = (sum((x["confidence"] - avg_conf) ** 2 for x in today_logs) / total_trades) ** 0.5
+    total_reward = sum(log["reward"] for log in today_logs)
+    capital = 300 + total_reward
 
-    models = [x["model"] for x in today_logs]
-    top_model = max(set(models), key=models.count)
+    wins = sum(1 for log in today_logs if log["reward"] > 0)
+    tp_hits = sum(1 for log in today_logs if log.get("reward_type") == "TP")
+    sl_hits = sum(1 for log in today_logs if log.get("reward_type") == "SL")
+    avg_conf = sum(log["confidence"] for log in today_logs) / total_trades
+    std_conf = (sum((log["confidence"] - avg_conf) ** 2 for log in today_logs) / total_trades) ** 0.5
 
-    capital = 300 + sum(x["reward"] for x in today_logs)
+    model_counts = {}
+    for log in today_logs:
+        model = log.get("model", "Unknown")
+        model_counts[model] = model_counts.get(model, 0) + 1
+    top_model = max(model_counts, key=model_counts.get)
 
     return {
         "final_capital": round(capital, 2),
         "win_rate": round(wins / total_trades, 2),
-        "tp_rate": round(tps / total_trades, 2),
-        "sl_rate": round(sls / total_trades, 2),
+        "tp_rate": round(tp_hits / total_trades, 2),
+        "sl_rate": round(sl_hits / total_trades, 2),
         "avg_confidence": round(avg_conf, 2),
         "std_confidence": round(std_conf, 4),
         "top_model": top_model,
