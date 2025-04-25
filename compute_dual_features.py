@@ -8,7 +8,8 @@ from fetch_market_data import fetch_market_data
 
 def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float, float]:
     close, high, low, volume = df["close"], df["high"], df["low"], df["volume"]
-    vwap = (close * volume).cumsum() / volume.cumsum()
+
+    vwap = (close * volume).cumsum() / (volume.cumsum() + 1e-9)
     vwap_diff = close - vwap
     obv = OnBalanceVolumeIndicator(close, volume).on_balance_volume().diff()
     mfi = MFIIndicator(high, low, close, volume).money_flow_index()
@@ -23,18 +24,13 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
     price_chg = close.pct_change()
     vol_chg = volume.pct_change()
 
-    # TP/SL 強化特徵
-    atr_ratio = atr / close
+    atr_ratio = atr / (close + 1e-9)
     rsi_zone = rsi / 100
     bb_pct = price_pos
-    bb_dev = bb_width / close
+    bb_dev = bb_width / (close + 1e-9)
     ma_slope = ma5.diff()
 
-    # 原始 TP/SL 特徵
-    raw_atr = atr.iloc[-1]
-    raw_bb = bb_width.iloc[-1]
-
-    # ✅ 斐波那契回撤支撐壓力特徵
+    # 斐波那契支撐壓力
     recent_high = high[-20:].max()
     recent_low = low[-20:].min()
     fib_levels = [recent_high - (recent_high - recent_low) * r for r in [0.236, 0.382, 0.5, 0.618, 0.786]]
@@ -47,19 +43,22 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
         rsi.iloc[-1], price_chg.iloc[-1], vol_chg.iloc[-1],
         atr_ratio.iloc[-1], rsi_zone.iloc[-1], bb_pct.iloc[-1],
         bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1],
-        fib_mean_dist  # ✅ 第 17 維：斐波那契距離
+        fib_mean_dist  # 第17維：斐波那契距離
     ])
 
     normalized = np.nan_to_num((features - features.mean()) / (features.std() + 1e-6))
-    return normalized, raw_atr, raw_bb, fib_mean_dist
+    return normalized, atr.iloc[-1], bb_width.iloc[-1], fib_mean_dist
 
-def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, float, float, float]:
+def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, float, float]]:
     df_15m = fetch_market_data(symbol=symbol, interval="15m", limit=100)
     df_1h = fetch_market_data(symbol=symbol, interval="1h", limit=100)
 
     features_15m, atr_15m, bb_15m, fib_15m = compute_single_features(df_15m)
     features_1h, _, _, _ = compute_single_features(df_1h)
+
     current_price = df_15m["close"].iloc[-1]
 
     dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 共 35 維
-    return dual_features, atr_15m, bb_15m, fib_15m
+
+    # ✅ 注意：回傳 (features, (atr, bb, fib))，是 tuple
+    return dual_features, (atr_15m, bb_15m, fib_15m)
