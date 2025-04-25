@@ -1,4 +1,3 @@
-# trainer.py
 import pandas as pd
 from datetime import datetime
 from compute_dual_features import compute_dual_features
@@ -12,23 +11,22 @@ def train_model():
     source = "實盤資料"
 
     try:
-        # ✅ 抓取雙週期特徵（共 35 維：斐波那契距離 + 雙週期特徵 + current_price）
-        features, _ = compute_dual_features("BTC-USDT")  # ATR 已內含在 features[3]
+        # ✅ 取得完整特徵與 TP/SL 所需指標
+        features, atr, bb_width, fib_distance = compute_dual_features("BTC-USDT")
     except Exception as e:
         print(f"❌ 無法取得實盤資料或計算特徵：{e}")
         return {"status": "error", "message": str(e)}
 
-    # ✅ 檢查特徵有效性
     if features is None or not features.any():
         print("⚠️ 雙週期技術指標異常，略過此次訓練")
         return {"status": "error", "message": "技術指標異常，無有效數據"}
 
-    # ✅ 傳入 features 給各模型訓練（內部提取 ATR 和斐波那契距離等資訊）
-    result_ppo = train_ppo(features)
-    result_a2c = train_a2c(features)
-    result_dqn = train_dqn(features)
+    # ✅ 傳入 features 及 TP/SL 計算依據
+    result_ppo = train_ppo(features, atr, bb_width, fib_distance)
+    result_a2c = train_a2c(features, atr, bb_width, fib_distance)
+    result_dqn = train_dqn(features, atr, bb_width, fib_distance)
 
-    # ✅ 選出最佳模型結果
+    # ✅ 選出最佳模型
     best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
 
     if "model" not in best or "confidence" not in best or "score" not in best:
@@ -38,7 +36,6 @@ def train_model():
             "raw": best
         }
 
-    # ✅ 記錄 retrain 結果到狀態檔
     record_retrain_status(best["model"], best["score"], best["confidence"])
 
     best["timestamp"] = datetime.utcnow().isoformat()
