@@ -1,47 +1,94 @@
-# trainer.py
-import pandas as pd
-from datetime import datetime
-from compute_dual_features import compute_dual_features
-from fetch_market_data import fetch_market_data
-from ppo_trainer import train_ppo
-from a2c_trainer import train_a2c
-from dqn_trainer import train_dqn
-from logger import record_retrain_status
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
+import numpy as np
+from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
+from replay_buffer import ReplayBuffer
+from reward_fetcher import get_real_reward
 
-def train_model():
-    source = "實盤資料"
+TRAIN_STEPS = 20
+GAMMA = 0.99
+LR = 1e-3
+BATCH_SIZE = 8
 
-    try:
-        # ✅ 抓取雙週期特徵與三個重要指標
-        features, (atr, bb_width, fib_distance) = compute_dual_features("BTC-USDT")
-    except Exception as e:
-        print(f"❌ 無法取得實盤資料或計算特徵：{e}")
-        return {"status": "error", "message": str(e)}
+MODEL_PATH = "ppo_model.pt"
+REPLAY_PATH = "ppo_replay.json"
 
-    # ✅ 檢查特徵有效性
-    if features is None or not features.any():
-        print("⚠️ 雙週期技術指標異常，略過此次訓練")
-        return {"status": "error", "message": "技術指標異常，無有效數據"}
+model = UnifiedRLModel(input_dim=35)
+load_model_if_exists(model, MODEL_PATH)
+optimizer = optim.Adam(model.parameters(), lr=LR)
 
-    # ✅ 四個參數傳入（符合目前 ppo、a2c、dqn trainer 的需求）
-    result_ppo = train_ppo(features, atr, bb_width, fib_distance)
-    result_a2c = train_a2c(features, atr, bb_width, fib_distance)
-    result_dqn = train_dqn(features, atr, bb_width, fib_distance)
+replay_buffer = ReplayBuffer(capacity=1000)
+replay_buffer.load(REPLAY_PATH)
 
-    # ✅ 選出最佳模型
-    best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
+def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
+    hit = np.random.rand()
+    raw = tp if hit < 0.5 else -sl
+    fee = 0.0004 * leverage * 2
+    funding = 0.00025 * leverage
+    base_reward = raw * leverage - fee - funding
+    fib_penalty = abs(fib_distance - 0.618)
+    return round(base_reward * (1 - fib_penalty), 4)
 
-    if "model" not in best or "confidence" not in best or "score" not in best:
-        return {
-            "status": "error",
-            "message": "模型訓練結果不完整",
-            "raw": best
-        }
+def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
+    x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
-    # ✅ 記錄 retrain 結果
-    record_retrain_status(best["model"], best["score"], best["confidence"])
+    logits, value, tp_out, sl_out, lev_out = model(x)
+    probs = F.softmax(logits, dim=-1)
+    dist = torch.distributions.Categorical(probs)
+    action = dist.sample()
 
-    best["timestamp"] = datetime.utcnow().isoformat()
-    best["status"] = "success"
-    best["source"] = source
-    return best
+    direction = "Long" if action.item() == 0 else "Short"
+    confidence = probs[0, action].item()
+
+    fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
+    tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
+    sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
+    leverage = torch.sigmoid(lev_out).item() * 9 + 1
+
+    reward_val, _, _ = get_real_reward()
+    if reward_val is None:
+        reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
+
+    replay_buffer.add(
+        state=x.squeeze(0).numpy(),
+        action=action.item(),
+        reward=reward_val,
+        next_state=x.squeeze(0).numpy(),
+        done=False
+    )
+
+    if len(replay_buffer) >= BATCH_SIZE:
+        states, actions, rewards, _, _ = replay_buffer.sample(BATCH_SIZE)
+        states = torch.tensor(states, dtype=torch.float32)
+        actions = torch.tensor(actions)
+        rewards = torch.tensor(rewards, dtype=torch.float32)
+
+        for _ in range(TRAIN_STEPS):
+            logits, values, _, _, _ = model(states)
+            dist = torch.distributions.Categorical(F.softmax(logits, dim=-1))
+            log_probs = dist.log_prob(actions)
+            _, next_values, _, _, _ = model(states)
+
+            advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
+            actor_loss = -(log_probs * advantages.detach()).mean()
+            critic_loss = advantages.pow(2).mean()
+            loss = actor_loss + critic_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    replay_buffer.save(REPLAY_PATH)
+    save_model(model, MODEL_PATH)
+
+    return {
+        "model": "PPO",
+        "direction": direction,
+        "confidence": round(confidence, 4),
+        "leverage": int(leverage),
+        "tp": round(tp * 100, 2),  # % 顯示
+        "sl": round(sl * 100, 2),
+        "score": round(reward_val, 4),
+        "fib_distance": round(fib_distance, 4)
+    }
