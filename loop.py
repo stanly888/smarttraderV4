@@ -9,7 +9,7 @@ from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
 from logbook_reward import log_reward_result
-from order_executor import submit_order  # ✅ 加入模擬送單模組
+from order_executor import submit_order  # ✅ 模擬送單模組
 
 TRADES_FILE = "real_trades.json"
 
@@ -71,11 +71,13 @@ while True:
     now = time.localtime()
     check_open_trades()
 
+    # ✅ 每 15 分鐘 retrain 一次模型
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
 
         if result.get("status") == "success":
+            result["price"] = get_current_price()  # ✅ 補上價格欄位
             record_retrain_status(result['model'], result['score'], result['confidence'])
             log_reward_result(result)
             send_strategy_update(result)
@@ -86,7 +88,7 @@ while True:
                 f"| TP={result['tp'] * 100:.2f}% SL={result['sl'] * 100:.2f}%{fib_str}"
             )
 
-            # ✅ 加入送單
+            # ✅ 實際執行送單（模擬）
             submit_order(
                 direction=result['direction'],
                 tp_pct=result['tp'],
@@ -98,6 +100,7 @@ while True:
         else:
             logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
 
+    # ✅ 每天 00:00 推送日報
     if now.tm_hour == 0 and not report_sent:
         metrics = analyze_daily_log()
         send_daily_report(metrics)
