@@ -17,14 +17,14 @@ BATCH_SIZE = 5
 model = ActorCritic(input_dim=35, action_dim=2)
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
-# ✅ 載入模型（若存在）
 if os.path.exists(MODEL_PATH):
     model.load_state_dict(torch.load(MODEL_PATH))
     print("✅ A2C 模型已載入")
 
-# ✅ 載入 Replay Buffer（若存在）
 replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load(REPLAY_PATH)
+if len(replay_buffer) > 0:
+    print("✅ A2C Replay Buffer 已載入")
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     raw = tp if np.random.rand() < 0.5 else -sl
@@ -71,7 +71,7 @@ def train_a2c(features: np.ndarray) -> dict:
         )
 
         _, next_value, _, _, _ = model(x)
-        advantage = torch.tensor([reward_val], dtype=torch.float32) + GAMMA * next_value - value
+        advantage = torch.tensor([reward_val], dtype=torch.float32) + GAMMA * next_value.detach() - value
 
         actor_loss = -dist.log_prob(action) * advantage.detach()
         critic_loss = advantage.pow(2)
@@ -81,7 +81,6 @@ def train_a2c(features: np.ndarray) -> dict:
         loss.backward()
         optimizer.step()
 
-    # ✅ Replay 記憶訓練
     if len(replay_buffer) >= BATCH_SIZE:
         for _ in range(3):
             try:
@@ -95,7 +94,7 @@ def train_a2c(features: np.ndarray) -> dict:
                 log_probs = dist.log_prob(actions)
                 _, next_values, _, _, _ = model(states)
 
-                advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
+                advantages = rewards + GAMMA * next_values.squeeze().detach() - values.squeeze()
                 actor_loss = -(log_probs * advantages.detach()).mean()
                 critic_loss = advantages.pow(2).mean()
                 loss = actor_loss + critic_loss
@@ -106,7 +105,6 @@ def train_a2c(features: np.ndarray) -> dict:
             except Exception as e:
                 print(f"⚠️ A2C 回放訓練失敗：{e}")
 
-    # ✅ 儲存模型與記憶
     torch.save(model.state_dict(), MODEL_PATH)
     replay_buffer.save(REPLAY_PATH)
 
@@ -124,8 +122,8 @@ def train_a2c(features: np.ndarray) -> dict:
         "model": "A2C",
         "direction": "Long" if selected.item() == 0 else "Short",
         "confidence": round(confidence.item(), 4),
-        "tp": round(tp * 100, 2),  # ✅ 轉為百分比
-        "sl": round(sl * 100, 2),
+        "tp": round(tp, 4),
+        "sl": round(sl, 4),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
         "fib_distance": round(fib_distance, 4)
