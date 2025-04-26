@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import os
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
@@ -20,6 +21,8 @@ optimizer = optim.Adam(model.parameters(), lr=LR)
 
 replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load(REPLAY_PATH)
+if len(replay_buffer) > 0:
+    print("✅ PPO Replay Buffer 已載入")
 
 def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     hit = np.random.rand()
@@ -59,25 +62,28 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
     )
 
     if len(replay_buffer) >= BATCH_SIZE:
-        states, actions, rewards, _, _ = replay_buffer.sample(BATCH_SIZE)
-        states = torch.tensor(states, dtype=torch.float32)
-        actions = torch.tensor(actions)
-        rewards = torch.tensor(rewards, dtype=torch.float32)
+        try:
+            states, actions, rewards, _, _ = replay_buffer.sample(BATCH_SIZE)
+            states = torch.tensor(states, dtype=torch.float32)
+            actions = torch.tensor(actions)
+            rewards = torch.tensor(rewards, dtype=torch.float32)
 
-        for _ in range(TRAIN_STEPS):
-            logits, values, _, _, _ = model(states)
-            dist = torch.distributions.Categorical(F.softmax(logits, dim=-1))
-            log_probs = dist.log_prob(actions)
-            _, next_values, _, _, _ = model(states)
+            for _ in range(TRAIN_STEPS):
+                logits, values, _, _, _ = model(states)
+                dist = torch.distributions.Categorical(F.softmax(logits, dim=-1))
+                log_probs = dist.log_prob(actions)
+                _, next_values, _, _, _ = model(states)
 
-            advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
-            actor_loss = -(log_probs * advantages.detach()).mean()
-            critic_loss = advantages.pow(2).mean()
-            loss = actor_loss + critic_loss
+                advantages = rewards + GAMMA * next_values.squeeze() - values.squeeze()
+                actor_loss = -(log_probs * advantages.detach()).mean()
+                critic_loss = advantages.pow(2).mean()
+                loss = actor_loss + critic_loss
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        except Exception as e:
+            print(f"⚠️ PPO 回放訓練失敗：{e}")
 
     replay_buffer.save(REPLAY_PATH)
     save_model(model, MODEL_PATH)
@@ -87,8 +93,8 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "direction": direction,
         "confidence": round(confidence, 4),
         "leverage": int(leverage),
-        "tp": round(tp * 100, 2),  # % 顯示
-        "sl": round(sl * 100, 2),
+        "tp": round(tp, 4),
+        "sl": round(sl, 4),
         "score": round(reward_val, 4),
         "fib_distance": round(fib_distance, 4)
     }
