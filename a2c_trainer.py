@@ -34,12 +34,8 @@ def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_d
     fib_penalty = abs(fib_distance - 0.618)
     return round(base * (1 - fib_penalty), 4)
 
-def train_a2c(features: np.ndarray) -> dict:
+def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
-    atr = max(features[3], 0.002)
-    fib_distance = features[16]
-    bb_width = features[4]
-
     total_reward = 0
 
     for _ in range(TRAIN_STEPS):
