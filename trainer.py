@@ -11,20 +11,25 @@ def train_model():
     source = "實盤資料"
 
     try:
-        # ✅ 取得完整特徵與 TP/SL 所需指標
-        features, atr, bb_width, fib_distance = compute_dual_features("BTC-USDT")
+        # ✅ 抓取雙週期特徵與三個重要指標
+        features, (atr, bb_width, fib_distance) = compute_dual_features("BTC-USDT")
     except Exception as e:
         print(f"❌ 無法取得實盤資料或計算特徵：{e}")
         return {"status": "error", "message": str(e)}
 
+    # ✅ 檢查特徵有效性
     if features is None or not features.any():
         print("⚠️ 雙週期技術指標異常，略過此次訓練")
         return {"status": "error", "message": "技術指標異常，無有效數據"}
 
-    # ✅ 傳入 features 及 TP/SL 計算依據
-    result_ppo = train_ppo(features, atr, bb_width, fib_distance)
-    result_a2c = train_a2c(features, atr, bb_width, fib_distance)
-    result_dqn = train_dqn(features, atr, bb_width, fib_distance)
+    try:
+        # ✅ 四個參數傳入（符合 ppo、a2c、dqn trainer 的需求）
+        result_ppo = train_ppo(features, atr, bb_width, fib_distance)
+        result_a2c = train_a2c(features, atr, bb_width, fib_distance)
+        result_dqn = train_dqn(features, atr, bb_width, fib_distance)
+    except Exception as e:
+        print(f"❌ 模型訓練過程中出錯：{e}")
+        return {"status": "error", "message": f"模型訓練失敗：{str(e)}"}
 
     # ✅ 選出最佳模型
     best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
@@ -36,6 +41,7 @@ def train_model():
             "raw": best
         }
 
+    # ✅ 記錄 retrain 結果
     record_retrain_status(best["model"], best["score"], best["confidence"])
 
     best["timestamp"] = datetime.utcnow().isoformat()
