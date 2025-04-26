@@ -6,6 +6,7 @@ import os
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
+from reward_utils import simulate_reward  # ✅ 引入統一的 simulate_reward
 
 TRAIN_STEPS = 20
 GAMMA = 0.99
@@ -23,15 +24,6 @@ replay_buffer = ReplayBuffer(capacity=1000)
 replay_buffer.load(REPLAY_PATH)
 if len(replay_buffer) > 0:
     print("✅ PPO Replay Buffer 已載入")
-
-def simulate_reward(direction: str, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
-    hit = np.random.rand()
-    raw = tp if hit < 0.5 else -sl
-    fee = 0.0004 * leverage * 2
-    funding = 0.00025 * leverage
-    base_reward = raw * leverage - fee - funding
-    fib_penalty = abs(fib_distance - 0.618)
-    return round(base_reward * (1 - fib_penalty), 4)
 
 def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
@@ -51,7 +43,13 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
     reward_val, _, _ = get_real_reward()
     if reward_val is None:
-        reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
+        reward_val = simulate_reward(
+            direction=direction,
+            tp=tp,
+            sl=sl,
+            leverage=leverage,
+            fib_distance=fib_distance
+        )
 
     replay_buffer.add(
         state=x.squeeze(0).numpy(),
@@ -93,8 +91,8 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "direction": direction,
         "confidence": round(confidence, 4),
         "leverage": int(leverage),
-        "tp": round(tp, 4),
-        "sl": round(sl, 4),
+        "tp": round(tp * 100, 2),  # ✅ 同步顯示成百分比
+        "sl": round(sl * 100, 2),
         "score": round(reward_val, 4),
         "fib_distance": round(fib_distance, 4)
     }
