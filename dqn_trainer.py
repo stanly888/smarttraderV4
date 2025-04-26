@@ -6,6 +6,7 @@ import os
 from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
+from reward_utils import simulate_reward  # ✅ 外部引入 simulate_reward
 
 MODEL_PATH = "dqn_model.pt"
 BUFFER_PATH = "dqn_replay.json"
@@ -24,16 +25,6 @@ buffer.load(BUFFER_PATH)
 if len(buffer) > 0:
     print("✅ DQN Replay Buffer 已載入")
 
-def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
-    if action == 2:  # Skip
-        return np.random.uniform(-0.1, 0.2)
-    raw = tp if np.random.rand() < 0.5 else -sl
-    fee = 0.0004 * leverage * 2
-    funding = 0.00025 * leverage
-    base = raw * leverage - fee - funding
-    fib_penalty = abs(fib_distance - 0.618)
-    return round(base * (1 - fib_penalty), 4)
-
 def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
@@ -51,7 +42,13 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
-            reward_val = simulate_reward(action, tp, sl, leverage, fib_distance)
+            reward_val = simulate_reward(
+                direction="Long" if action == 0 else "Short" if action == 1 else "Skip",
+                tp=tp,
+                sl=sl,
+                leverage=leverage,
+                fib_distance=fib_distance
+            )
 
         total_reward += reward_val
 
@@ -94,8 +91,8 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "tp": round(tp, 4),
-        "sl": round(sl, 4),
+        "tp": round(tp * 100, 2),   # ✅ 統一顯示成百分比
+        "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
         "fib_distance": round(fib_distance, 4)
