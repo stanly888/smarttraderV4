@@ -43,10 +43,13 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
         rsi.iloc[-1], price_chg.iloc[-1], vol_chg.iloc[-1],
         atr_ratio.iloc[-1], rsi_zone.iloc[-1], bb_pct.iloc[-1],
         bb_dev.iloc[-1], ma_slope.iloc[-1], close.iloc[-1],
-        fib_mean_dist  # 第17維：斐波那契距離
+        fib_mean_dist
     ])
 
-    normalized = np.nan_to_num((features - features.mean()) / (features.std() + 1e-6))
+    # ✅ 特徵標準化
+    normalized = np.nan_to_num((features - np.mean(features)) / (np.std(features) + 1e-6))
+
+    # ✅ 這裡直接返回：標準化特徵、原始ATR、原始BB寬、Fib距離
     return normalized, atr.iloc[-1], bb_width.iloc[-1], fib_mean_dist
 
 def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, float, float]]:
@@ -58,7 +61,6 @@ def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, f
 
     current_price = df_15m["close"].iloc[-1]
 
-    dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 共 35 維
+    dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 34+1 = 35維
 
-    # ✅ 注意：回傳 (features, (atr, bb, fib))，是 tuple
     return dual_features, (atr_15m, bb_15m, fib_15m)
