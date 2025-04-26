@@ -1,4 +1,3 @@
-# dqn_trainer.py
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -22,6 +21,8 @@ print("✅ DQN 模型已載入")
 
 buffer = ReplayBuffer(capacity=1000)
 buffer.load(BUFFER_PATH)
+if len(buffer) > 0:
+    print("✅ DQN Replay Buffer 已載入")
 
 def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_distance: float) -> float:
     if action == 2:  # Skip
@@ -33,11 +34,7 @@ def simulate_reward(action: int, tp: float, sl: float, leverage: float, fib_dist
     fib_penalty = abs(fib_distance - 0.618)
     return round(base * (1 - fib_penalty), 4)
 
-def train_dqn(features: np.ndarray) -> dict:
-    atr = max(features[3], 0.002)
-    fib_distance = features[16]
-    bb_width = features[4]
-
+def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -86,7 +83,7 @@ def train_dqn(features: np.ndarray) -> dict:
                 loss.backward()
                 optimizer.step()
             except Exception as e:
-                print(f"⚠️ DQN 訓練錯誤：{e}")
+                print(f"⚠️ DQN 回放訓練失敗：{e}")
 
     save_model(model, MODEL_PATH)
     buffer.save(BUFFER_PATH)
@@ -97,8 +94,8 @@ def train_dqn(features: np.ndarray) -> dict:
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "tp": round(tp * 100, 2),
-        "sl": round(sl * 100, 2),
+        "tp": round(tp, 4),
+        "sl": round(sl, 4),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
         "fib_distance": round(fib_distance, 4)
