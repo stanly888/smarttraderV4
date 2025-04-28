@@ -15,7 +15,7 @@ from compute_dual_features import compute_dual_features
 TRADES_FILE = "real_trades.json"
 PNL_FILE = "daily_pnl.json"
 CONFIDENCE_THRESHOLD = 0.7
-DAILY_LOSS_LIMIT = -30  # 每日最大虧損限制
+DAILY_LOSS_LIMIT = -30
 DEFAULT_LEVERAGE = 5
 MAX_LEVERAGE = 10
 MIN_LEVERAGE = 2
@@ -64,7 +64,6 @@ def check_open_trades():
             sl_price = trade["sl_price"]
             entry_price = trade["entry_price"]
 
-            # ✅ 判斷是否命中 TP 或 SL
             if direction == "Long":
                 if current_price >= tp_price:
                     trade["status"] = "hit_tp"
@@ -75,14 +74,12 @@ def check_open_trades():
                     updated = True
                     logging.info(f"⚠️ 命中 SL：{trade}")
                 else:
-                    # ✅ 智能縮損：若價格跌破 entry - 0.25%，提早stop loss
                     if current_price <= entry_price * 0.9975:
                         trade["status"] = "hit_sl"
                         updated = True
                         logging.info(f"⚠️ 智能縮損觸發 SL：{trade}")
-                    # ✅ TP自動拉伸：若價格漲超過原TP價5%，自動拉高TP
                     if current_price >= tp_price * 1.05:
-                        trade["tp_price"] = round(current_price * 1.01, 2)  # 新TP為現價上漲1%
+                        trade["tp_price"] = round(current_price * 1.01, 2)
                         logging.info(f"🚀 TP自動拉伸：{trade}")
             else:
                 if current_price <= tp_price:
@@ -94,12 +91,10 @@ def check_open_trades():
                     updated = True
                     logging.info(f"⚠️ 命中 SL：{trade}")
                 else:
-                    # ✅ 智能縮損
                     if current_price >= entry_price * 1.0025:
                         trade["status"] = "hit_sl"
                         updated = True
                         logging.info(f"⚠️ 智能縮損觸發 SL：{trade}")
-                    # ✅ TP自動拉伸
                     if current_price <= tp_price * 0.95:
                         trade["tp_price"] = round(current_price * 0.99, 2)
                         logging.info(f"🚀 TP自動拉伸：{trade}")
@@ -112,9 +107,6 @@ def check_open_trades():
         logging.warning(f"❌ 檢查 open trades 錯誤：{e}")
 
 def dynamic_leverage_adjustment(confidence: float) -> int:
-    """
-    根據信心動態調整槓桿，範圍在 MIN_LEVERAGE ~ MAX_LEVERAGE
-    """
     if confidence >= 0.95:
         return MAX_LEVERAGE
     elif confidence >= 0.85:
@@ -124,14 +116,13 @@ def dynamic_leverage_adjustment(confidence: float) -> int:
     else:
         return DEFAULT_LEVERAGE
 
-# === 主迴圈 ===
+# === 主迴圈開始 ===
 daily_pnl = load_daily_pnl()
 
 while True:
     now = time.localtime()
     check_open_trades()
 
-    # ✅ 每15分鐘 retrain一次
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
@@ -140,7 +131,6 @@ while True:
             result["price"] = get_current_price()
             record_retrain_status(result['model'], result['score'], result['confidence'])
             log_reward_result(result)
-            send_strategy_update(result)
 
             fib_str = f" | Fib={round(result['fib_distance'], 3)}" if "fib_distance" in result else ""
             logging.info(
@@ -148,7 +138,6 @@ while True:
                 f"| TP={result['tp']:.2f}% SL={result['sl']:.2f}%{fib_str}"
             )
 
-    # ✅ 每30秒推論送單
     if not loss_triggered:
         try:
             features, (atr, bb_width, fib_distance, volatility_factor) = compute_dual_features()
@@ -157,11 +146,8 @@ while True:
             if inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
                 logging.info(f"🚀 信心足夠，準備下單 | {inference}")
 
-                # ✅ TP/SL 自適應調整
                 adaptive_tp = inference['tp'] * volatility_factor
                 adaptive_sl = inference['sl'] / volatility_factor
-
-                # ✅ 槓桿根據信心自適應
                 dynamic_leverage = dynamic_leverage_adjustment(inference['confidence'])
 
                 submit_order(
@@ -180,12 +166,24 @@ while True:
                     logging.warning(f"⚠️ 已達今日最大虧損，停止交易！")
 
                 log_reward_result(inference)
-                send_strategy_update(inference)
+
+                # ✅ 推播送出百分比格式
+                tp_display = round(adaptive_tp * 100, 2)
+                sl_display = round(adaptive_sl * 100, 2)
+
+                message = (
+                    f"📡 [SmartTrader 策略推播]\n"
+                    f"模型：{inference['model']}（更新於：{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}）\n"
+                    f"方向：{inference['direction']}（信心：{inference['confidence']:.2f}）\n"
+                    f"槓桿：{dynamic_leverage}x\n"
+                    f"TP：+{tp_display}% / SL：-{sl_display}%"
+                )
+
+                send_strategy_update({"text": message})
 
         except Exception as e:
             logging.warning(f"❌ 即時推論/送單失敗：{e}")
 
-    # ✅ 每天00:00 重置
     if now.tm_hour == 0 and not report_sent:
         metrics = analyze_daily_log()
         send_daily_report(metrics)
