@@ -27,7 +27,7 @@ replay_buffer.load(REPLAY_PATH)
 if len(replay_buffer) > 0:
     print("✅ A2C Replay Buffer 已載入")
 
-def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
+def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: float, confidence_threshold: float = 0.7) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -40,11 +40,21 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
 
+        # ✅ 信心過濾：信心太低直接選一個 Skip 的行為（A2C是二選一，暫時保留）
+        if confidence < confidence_threshold:
+            # 這裡如果想更細可以自己加判斷，比如減小倉位，現在先保留直接進場但標註信心低。
+
+            pass  # 目前保留（A2C二分類，不進行強制改動）
+
+        # ✅ TP/SL動態調整
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
-        leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
+        # ✅ 槓桿預測並限制在1~10倍
+        leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
+
+        # ✅ 優先使用真實 reward
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
             reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
@@ -70,6 +80,7 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         loss.backward()
         optimizer.step()
 
+    # ✅ Replay Buffer 加強訓練
     if len(replay_buffer) >= BATCH_SIZE:
         for _ in range(3):
             try:
@@ -105,7 +116,7 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
-        leverage = torch.sigmoid(lev_out).item() * 9 + 1
+        leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
     return {
         "model": "A2C",
