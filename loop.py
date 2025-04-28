@@ -34,9 +34,6 @@ daily_pnl = 0
 loss_triggered = False
 
 def sanitize_inference(inference: dict) -> dict:
-    """
-    把 inference 裡的 np型別全轉成純Python型別
-    """
     cleaned = {}
     for k, v in inference.items():
         if isinstance(v, (np.float64, np.float32, np.float16)):
@@ -160,10 +157,10 @@ while True:
             features, (atr, bb_width, fib_distance, volatility_factor) = compute_dual_features()
             inference = train_model(features=features, atr=atr, bb_width=bb_width, fib_distance=fib_distance)
 
-            # ✅ 推論後立即sanitize，保證乾淨
             inference = sanitize_inference(inference)
 
-            if inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
+            # ✅ 加上推論狀態確認
+            if inference.get("status") == "success" and inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
                 logging.info(f"🚀 信心足夠，準備下單 | {inference}")
 
                 adaptive_tp = inference['tp'] * volatility_factor
@@ -188,12 +185,6 @@ while True:
 
                 daily_pnl += inference['score']
                 save_daily_pnl(daily_pnl)
-
-                if daily_pnl <= DAILY_LOSS_LIMIT:
-                    loss_triggered = True
-                    logging.warning(f"⚠️ 已達今日最大虧損，停止交易！")
-
-                log_reward_result(inference)
 
                 tp_display = round(adaptive_tp * 100, 2)
                 sl_display = round(adaptive_sl * 100, 2)
