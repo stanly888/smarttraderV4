@@ -82,14 +82,14 @@ def check_open_trades():
     except Exception as e:
         logging.warning(f"❌ 檢查 open trades 錯誤：{e}")
 
-# === 主迴圈 ===
+# === 主迴圈開始 ===
 daily_pnl = load_daily_pnl()
 
 while True:
     now = time.localtime()
     check_open_trades()
 
-    # ✅ 每 15 分鐘 retrain 一次
+    # ✅ 每15分鐘 retrain模型
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
@@ -109,21 +109,24 @@ while True:
     # ✅ 每30秒即時推論送單
     if not loss_triggered:
         try:
-            features, (atr, bb_width, fib_distance) = compute_dual_features()
+            features, (atr, bb_width, fib_distance, volatility_factor) = compute_dual_features()
             inference = train_model(features=features, atr=atr, bb_width=bb_width, fib_distance=fib_distance)
 
             if inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
                 logging.info(f"🚀 信心足夠，準備下單 | {inference}")
 
+                # ✅ TP/SL 自適應
+                adaptive_tp = inference['tp'] * volatility_factor
+                adaptive_sl = inference['sl'] / volatility_factor
+
                 submit_order(
                     direction=inference['direction'],
-                    tp_pct=inference['tp'],
-                    sl_pct=inference['sl'],
+                    tp_pct=adaptive_tp,
+                    sl_pct=adaptive_sl,
                     leverage=inference['leverage'],
                     confidence=inference['confidence']
                 )
 
-                # 更新日累積損益
                 daily_pnl += inference['score']
                 save_daily_pnl(daily_pnl)
 
