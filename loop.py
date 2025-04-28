@@ -148,6 +148,15 @@ while True:
 
                 adaptive_tp = inference['tp'] * volatility_factor
                 adaptive_sl = inference['sl'] / volatility_factor
+
+                # ✅ 防止TP/SL異常爆炸
+                if adaptive_tp < 0.002 or adaptive_tp > 0.2:
+                    logging.warning(f"⚠️ TP異常({adaptive_tp:.4f}), 自動調整為0.01")
+                    adaptive_tp = 0.01
+                if adaptive_sl < 0.002 or adaptive_sl > 0.2:
+                    logging.warning(f"⚠️ SL異常({adaptive_sl:.4f}), 自動調整為0.01")
+                    adaptive_sl = 0.01
+
                 dynamic_leverage = dynamic_leverage_adjustment(inference['confidence'])
 
                 submit_order(
