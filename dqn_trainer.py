@@ -25,7 +25,7 @@ buffer.load(BUFFER_PATH)
 if len(buffer) > 0:
     print("✅ DQN Replay Buffer 已載入")
 
-def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
+def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: float, confidence_threshold: float = 0.7) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
     total_reward = 0
 
@@ -35,11 +35,20 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
+        # ✅ 信心過濾：信心不夠高就直接 skip
+        if confidence < confidence_threshold:
+            action = 2  # 直接設定為 Skip
+            confidence = 1.0  # 避免亂掉
+
+        # ✅ 動態 TP/SL 計算，依據 fib_weight 微調
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
-        leverage = torch.sigmoid(lev_out).item() * 9 + 1
 
+        # ✅ 槓桿預測（限制在1~10倍）
+        leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
+
+        # ✅ 優先取真實 reward，否則用模擬
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
             reward_val = simulate_reward(
@@ -91,7 +100,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "tp": round(tp * 100, 2),   # ✅ 統一顯示成百分比
+        "tp": round(tp * 100, 2),   # ✅ 統一成百分比
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
