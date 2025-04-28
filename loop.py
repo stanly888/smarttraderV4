@@ -9,9 +9,11 @@ from telegram import send_strategy_update, send_daily_report
 from logger import record_retrain_status
 from metrics import analyze_daily_log
 from logbook_reward import log_reward_result
-from order_executor import submit_order  # ✅ 模擬送單模組
+from order_executor import submit_order
+from compute_dual_features import compute_dual_features
 
 TRADES_FILE = "real_trades.json"
+CONFIDENCE_THRESHOLD = 0.7
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,7 +73,7 @@ while True:
     now = time.localtime()
     check_open_trades()
 
-    # ✅ 每 15 分鐘 retrain 一次模型
+    # ✅ 每 15 分鐘 retrain 模型一次
     if now.tm_min % 15 == 0 and now.tm_min != last_retrain_minute:
         last_retrain_minute = now.tm_min
         result = train_model()
@@ -84,23 +86,33 @@ while True:
 
             fib_str = f" | Fib={round(result['fib_distance'], 3)}" if "fib_distance" in result else ""
             logging.info(
-                f"✅ 已完成訓練與推播：{result['model']} | 信心={result['confidence']:.2f} "
-                f"| TP={result['tp'] * 100:.2f}% SL={result['sl'] * 100:.2f}%{fib_str}"
+                f"✅ 已完成 retrain：{result['model']} | 信心={result['confidence']:.2f} "
+                f"| TP={result['tp']:.2f}% SL={result['sl']:.2f}%{fib_str}"
             )
 
-            # ✅ 實際執行送單（模擬）
+    # ✅ 每30秒判斷是否進場
+    try:
+        features, (atr, bb_width, fib_distance) = compute_dual_features()
+        inference = train_model(features=features, atr=atr, bb_width=bb_width, fib_distance=fib_distance)
+
+        if inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
+            logging.info(f"🚀 信心足夠，準備下單 | {inference}")
+
             submit_order(
-                direction=result['direction'],
-                tp_pct=result['tp'],
-                sl_pct=result['sl'],
-                leverage=result['leverage'],
-                confidence=result['confidence']
+                direction=inference['direction'],
+                tp_pct=inference['tp'],
+                sl_pct=inference['sl'],
+                leverage=inference['leverage'],
+                confidence=inference['confidence']
             )
 
-        else:
-            logging.warning(f"❌ 本輪訓練失敗：{result.get('message')}")
+            log_reward_result(inference)
+            send_strategy_update(inference)
 
-    # ✅ 每天 00:00 推送日報
+    except Exception as e:
+        logging.warning(f"❌ 即時判斷/送單失敗：{e}")
+
+    # ✅ 每天00:00推送日報
     if now.tm_hour == 0 and not report_sent:
         metrics = analyze_daily_log()
         send_daily_report(metrics)
@@ -109,4 +121,4 @@ while True:
     elif now.tm_hour != 0:
         report_sent = False
 
-    time.sleep(60)
+    time.sleep(30)  # ✅ 每30秒跑一次
