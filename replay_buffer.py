@@ -9,13 +9,11 @@ class ReplayBuffer:
         self.buffer = deque(maxlen=capacity)
 
     def add(self, state, action, reward, next_state, done):
-        """標準五元組輸入"""
         state = np.asarray(state, dtype=np.float32).flatten().tolist()
         next_state = np.asarray(next_state, dtype=np.float32).flatten().tolist()
         self.buffer.append((state, action, reward, next_state, done))
 
     def push(self, state, action, reward):
-        """簡化版本，將 next_state = state 且 done=False"""
         self.add(state, action, reward, next_state=state, done=False)
 
     def sample(self, batch_size):
@@ -24,7 +22,6 @@ class ReplayBuffer:
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = map(np.array, zip(*batch))
 
-        # ✅ 統一轉為 float32
         states = states.astype(np.float32)
         next_states = next_states.astype(np.float32)
         rewards = rewards.astype(np.float32)
@@ -43,8 +40,11 @@ class ReplayBuffer:
         self.buffer.clear()
 
     def save(self, path="replay_buffer.json"):
+        # ✅ 新增防呆：如果path是空的，補上預設值
+        if not path:
+            path = "replay_buffer.json"
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)  # ✅ 自動建立資料夾
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             with open(path, "w") as f:
                 json.dump(list(self.buffer), f, default=self._convert_safe, allow_nan=False)
             print(f"✅ Replay Buffer 已儲存：{path}")
@@ -52,6 +52,8 @@ class ReplayBuffer:
             print(f"❌ 儲存 Replay Buffer 失敗：{e}")
 
     def load(self, path="replay_buffer.json"):
+        if not path:
+            path = "replay_buffer.json"
         if not os.path.exists(path):
             print(f"⚠️ 找不到 Replay Buffer 檔案：{path}")
             return
@@ -64,7 +66,6 @@ class ReplayBuffer:
             print(f"❌ 載入 Replay Buffer 失敗：{e}")
 
     def _convert_safe(self, obj):
-        """支援 numpy 型別轉換，且保證safe"""
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         if isinstance(obj, (np.int64, np.int32, np.int8)):
