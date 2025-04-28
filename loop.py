@@ -3,6 +3,7 @@ import json
 import os
 import logging
 from datetime import datetime
+import numpy as np
 from trainer import train_model
 from price_fetcher import get_current_price
 from telegram import send_strategy_update, send_daily_report
@@ -31,6 +32,22 @@ report_sent = False
 last_retrain_minute = -1
 daily_pnl = 0
 loss_triggered = False
+
+def sanitize_inference(inference: dict) -> dict:
+    """
+    把 inference 裡的 np型別全轉成純Python型別
+    """
+    cleaned = {}
+    for k, v in inference.items():
+        if isinstance(v, (np.float64, np.float32, np.float16)):
+            cleaned[k] = float(v)
+        elif isinstance(v, (np.int64, np.int32, np.int8)):
+            cleaned[k] = int(v)
+        elif isinstance(v, (np.bool_)):
+            cleaned[k] = bool(v)
+        else:
+            cleaned[k] = v
+    return cleaned
 
 def load_daily_pnl():
     if os.path.exists(PNL_FILE):
@@ -143,13 +160,15 @@ while True:
             features, (atr, bb_width, fib_distance, volatility_factor) = compute_dual_features()
             inference = train_model(features=features, atr=atr, bb_width=bb_width, fib_distance=fib_distance)
 
+            # ✅ 推論後立即sanitize，保證乾淨
+            inference = sanitize_inference(inference)
+
             if inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
                 logging.info(f"🚀 信心足夠，準備下單 | {inference}")
 
                 adaptive_tp = inference['tp'] * volatility_factor
                 adaptive_sl = inference['sl'] / volatility_factor
 
-                # ✅ 防止TP/SL異常爆炸
                 if adaptive_tp < 0.002 or adaptive_tp > 0.2:
                     logging.warning(f"⚠️ TP異常({adaptive_tp:.4f}), 自動調整為0.01")
                     adaptive_tp = 0.01
@@ -176,7 +195,6 @@ while True:
 
                 log_reward_result(inference)
 
-                # ✅ 推播送出百分比格式
                 tp_display = round(adaptive_tp * 100, 2)
                 sl_display = round(adaptive_sl * 100, 2)
 
