@@ -6,7 +6,7 @@ from ta.volatility import BollingerBands, AverageTrueRange
 from ta.momentum import RSIIndicator
 from fetch_market_data import fetch_market_data
 
-def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float, float]:
+def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float, float, float]:
     close, high, low, volume = df["close"], df["high"], df["low"], df["volume"]
 
     vwap = (close * volume).cumsum() / (volume.cumsum() + 1e-9)
@@ -37,6 +37,14 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
     fib_distances = [abs(close.iloc[-1] - level) for level in fib_levels]
     fib_mean_dist = np.mean(fib_distances)
 
+    # ✅ 計算波動指標（用ATR比例與BB寬比例）
+    atr_pct = atr.iloc[-1] / close.iloc[-1]
+    bb_pct_value = bb_width.iloc[-1] / close.iloc[-1]
+
+    # ✅ 設定 volatility_factor：波動越大，factor越大
+    volatility_factor = (atr_pct + bb_pct_value) * 10  # 可以自己調倍率
+    volatility_factor = np.clip(volatility_factor, 0.5, 2.0)  # 限制在0.5x～2.0x之間
+
     features = np.array([
         vwap_diff.iloc[-1], obv.iloc[-1], mfi.iloc[-1], atr.iloc[-1],
         bb_width.iloc[-1], price_pos.iloc[-1], ma_diff.iloc[-1],
@@ -49,18 +57,18 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
     # ✅ 特徵標準化
     normalized = np.nan_to_num((features - np.mean(features)) / (np.std(features) + 1e-6))
 
-    # ✅ 這裡直接返回：標準化特徵、原始ATR、原始BB寬、Fib距離
-    return normalized, atr.iloc[-1], bb_width.iloc[-1], fib_mean_dist
+    # ✅ 返回 normalized features, ATR, BB寬, Fib距離, volatility factor
+    return normalized, atr.iloc[-1], bb_width.iloc[-1], fib_mean_dist, volatility_factor
 
-def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, float, float]]:
+def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, float, float, float]]:
     df_15m = fetch_market_data(symbol=symbol, interval="15m", limit=100)
     df_1h = fetch_market_data(symbol=symbol, interval="1h", limit=100)
 
-    features_15m, atr_15m, bb_15m, fib_15m = compute_single_features(df_15m)
-    features_1h, _, _, _ = compute_single_features(df_1h)
+    features_15m, atr_15m, bb_15m, fib_15m, vol_factor_15m = compute_single_features(df_15m)
+    features_1h, _, _, _, _ = compute_single_features(df_1h)
 
     current_price = df_15m["close"].iloc[-1]
 
     dual_features = np.concatenate([features_15m, features_1h, [current_price]])  # 34+1 = 35維
 
-    return dual_features, (atr_15m, bb_15m, fib_15m)
+    return dual_features, (atr_15m, bb_15m, fib_15m, vol_factor_15m)
