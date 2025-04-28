@@ -25,7 +25,7 @@ replay_buffer.load(REPLAY_PATH)
 if len(replay_buffer) > 0:
     print("✅ PPO Replay Buffer 已載入")
 
-def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: float) -> dict:
+def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: float, confidence_threshold: float = 0.7) -> dict:
     x = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
     logits, value, tp_out, sl_out, lev_out = model(x)
@@ -36,10 +36,18 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
     direction = "Long" if action.item() == 0 else "Short"
     confidence = probs[0, action].item()
 
+    # ✅ 信心過濾
+    if confidence < confidence_threshold:
+        action = torch.tensor(1)  # 可以設定成保守方向或不進場，這裡示範設定Short
+        confidence = 1.0  # 避免後面計算爆掉
+
+    # ✅ TP/SL 動態調整
     fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
     tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
     sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
-    leverage = torch.sigmoid(lev_out).item() * 9 + 1
+
+    # ✅ 槓桿動態限制
+    leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
     reward_val, _, _ = get_real_reward()
     if reward_val is None:
@@ -63,7 +71,7 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         try:
             states, actions, rewards, _, _ = replay_buffer.sample(BATCH_SIZE)
             states = torch.tensor(states, dtype=torch.float32)
-            actions = torch.tensor(actions)
+            actions = torch.tensor(actions, dtype=torch.long)
             rewards = torch.tensor(rewards, dtype=torch.float32)
 
             for _ in range(TRAIN_STEPS):
@@ -90,9 +98,9 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "model": "PPO",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "leverage": int(leverage),
-        "tp": round(tp * 100, 2),  # ✅ 同步顯示成百分比
+        "tp": round(tp * 100, 2),  # ✅ 百分比顯示
         "sl": round(sl * 100, 2),
+        "leverage": int(leverage),
         "score": round(reward_val, 4),
         "fib_distance": round(fib_distance, 4)
     }
