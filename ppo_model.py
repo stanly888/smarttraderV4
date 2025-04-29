@@ -3,7 +3,7 @@ import torch.nn as nn
 import os
 
 class UnifiedRLModel(nn.Module):
-    def __init__(self, input_dim=35, hidden_dim=64):  # ✅ input_dim 改為 35（最新雙週期特徵 + fib + 價格）
+    def __init__(self, input_dim=35, hidden_dim=64):
         super(UnifiedRLModel, self).__init__()
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -23,7 +23,9 @@ class UnifiedRLModel(nn.Module):
         tp = self.tp_head(x)
         sl = self.sl_head(x)
         lev = self.lev_head(x)
-        return logits, value, tp, sl, lev
+
+        # 在返回數值時，使用 .item() 來轉換為純數字
+        return logits, value.item(), tp.item(), sl.item(), lev.item()
 
 def save_model(model, path="ppo_model.pt"):
     torch.save(model.state_dict(), path)
