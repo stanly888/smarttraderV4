@@ -22,7 +22,9 @@ class DQN(nn.Module):
         tp_out = self.tp_head(x)
         sl_out = self.sl_head(x)
         lev_out = self.lev_head(x)
-        return direction_logits, tp_out, sl_out, lev_out
+
+        # 在這裡將 Tensor 類型數值使用 .item() 轉換為純數字 (float)
+        return direction_logits, tp_out.item(), sl_out.item(), lev_out.item()
 
 # ✅ 儲存模型
 def save_model(model, path="dqn_model.pt"):
