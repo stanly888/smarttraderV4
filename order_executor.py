@@ -49,6 +49,8 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
         except Exception as e:
             print(f"⚠️ 載入交易紀錄失敗，將重新建立：{e}")
             trades = []
+    else:
+        print(f"⚠️ 找不到交易檔案，將創建新的檔案：{TRADES_FILE}")
 
     trades.append(trade)
 
