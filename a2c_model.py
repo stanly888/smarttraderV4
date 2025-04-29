@@ -25,7 +25,9 @@ class ActorCritic(nn.Module):
         tp_out = self.tp_head(shared_out)
         sl_out = self.sl_head(shared_out)
         lev_out = self.lev_head(shared_out)
-        return logits, value, tp_out, sl_out, lev_out
+
+        # 在這裡返回時將其轉換為 Python 基本數據類型（使用 .item()）
+        return logits, value.item(), tp_out.item(), sl_out.item(), lev_out.item()
 
 # ✅ 儲存模型
 def save_model(model, path="a2c_model.pt"):
