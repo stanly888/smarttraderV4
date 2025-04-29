@@ -42,6 +42,7 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
     }
 
     trades = []
+    # 檢查交易檔案是否存在
     if os.path.exists(TRADES_FILE):
         try:
             with open(TRADES_FILE, "r") as f:
@@ -52,9 +53,11 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
     else:
         print(f"⚠️ 找不到交易檔案，將創建新的檔案：{TRADES_FILE}")
 
+    # 新交易紀錄添加到交易清單中
     trades.append(trade)
 
     try:
+        # 將交易紀錄寫入檔案
         with open(TRADES_FILE, "w") as f:
             json.dump(trades, f, indent=2)
         print(f"✅ 模擬送單成功：方向={direction} | 進場價={price:.2f} | TP={tp_price:.2f} | SL={sl_price:.2f} | 槓桿={int(leverage)}x | 信心={confidence:.2f}")
