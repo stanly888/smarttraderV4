@@ -32,7 +32,7 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
     total_reward = 0
 
     for _ in range(TRAIN_STEPS):
-        # 模型前向傳播
+        # 模型前向傳播，得到模型的輸出
         logits, value, tp_out, sl_out, lev_out = model(x)
         probs = F.softmax(logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
