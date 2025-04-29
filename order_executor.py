@@ -42,16 +42,21 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
     }
 
     trades = []
-    # 檢查交易檔案是否存在
+    
+    # 檢查交易檔案是否存在且格式正確
     if os.path.exists(TRADES_FILE):
         try:
             with open(TRADES_FILE, "r") as f:
                 trades = json.load(f)
-        except Exception as e:
-            print(f"⚠️ 載入交易紀錄失敗，將重新建立：{e}")
-            trades = []
+        except json.JSONDecodeError as e:
+            print(f"⚠️ 交易檔案格式錯誤，將重新創建：{e}")
+            trades = []  # 檔案格式錯誤，初始化為空清單
     else:
         print(f"⚠️ 找不到交易檔案，將創建新的檔案：{TRADES_FILE}")
+
+    # 如果檔案為空或格式錯誤，創建一個有效的空交易列表
+    if not trades:
+        trades = []
 
     # 新交易紀錄添加到交易清單中
     trades.append(trade)
