@@ -6,7 +6,7 @@ import os
 from a2c_model import ActorCritic
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
-from reward_utils import simulate_reward  # ✅ 引入外部 simulate_reward 函數
+from reward_utils import simulate_reward  # ✅ 外部引入 simulate_reward 函數
 
 MODEL_PATH = "a2c_model.pt"
 REPLAY_PATH = "a2c_replay.json"
@@ -43,12 +43,13 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         direction = "Long" if action.item() == 0 else "Short"
         confidence = probs[0, action].item()
 
-        # ✅ 信心過濾：信心低的情況直接選擇 Skip（目前A2C二分類，保留此功能）
+        # ✅ 信心過濾：信心低的情況直接選擇 Skip（目前A2C二選一，保留此功能）
         if confidence < confidence_threshold:
-            action = torch.tensor(2)  # 設定為 Skip
-            confidence = 1.0  # 防止影響後續計算
+            # 這裡如果想更細可以自己加判斷，比如減小倉位，現在先保留直接進場但標註信心低。
 
-        # ✅ TP/SL 動態調整
+            pass  # 目前保留（A2C二分類，不進行強制改動）
+
+        # ✅ TP/SL動態調整
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算TP
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止SL過小
@@ -56,7 +57,7 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         # ✅ 槓桿預測並限制在1到10倍
         leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
-        # ✅ 優先使用真實的reward，若無則使用模擬reward
+        # ✅ 優先使用真實reward，若無則使用模擬reward
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
             reward_val = simulate_reward(direction, tp, sl, leverage, fib_distance)
