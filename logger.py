@@ -20,14 +20,25 @@ def record_retrain_status(model_name: str, reward: float, confidence: float, sou
 
     # 確保目錄存在
     try:
+        # 確保目錄存在，如果 STATUS_FILE 不是一個目錄的話才創建
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
     except Exception as e:
         print(f"❌ 無法創建目錄：{e}")
 
     try:
-        # 檢查檔案是否存在並可寫入
+        # 讀取現有的 retrain_status.json 文件並加載其中的資料
+        if os.path.exists(STATUS_FILE):
+            with open(STATUS_FILE, "r") as f:
+                all_data = json.load(f)
+        else:
+            all_data = []
+
+        # 將新的 retrain 結果加入到現有資料中
+        all_data.append(data)
+
+        # 寫回整個資料清單到檔案
         with open(STATUS_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(all_data, f, indent=2)
         print(f"✅ 已更新 retrain 狀態：{model_name}（score={reward}, confidence={confidence}）")
     except Exception as e:
         # 捕獲檔案操作錯誤並輸出錯誤訊息
