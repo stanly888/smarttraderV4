@@ -1,6 +1,6 @@
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import os
 from dqn_model import DQN, save_model, load_model_if_exists
@@ -38,18 +38,18 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         action = torch.argmax(probs, dim=-1).item()  # 取得最佳的動作
         confidence = probs[0, action].item()
 
-        # ✅ 信心過濾：信心不夠高就直接選擇 Skip
+        # ✅ 信心過濾：信心不夠高直接選擇 Skip
         if confidence < confidence_threshold:
             action = 2  # 直接設定為 Skip
             confidence = 1.0  # 避免影響後續計算
 
         # ✅ 動態 TP/SL 計算，根據 fib_weight 微調
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
-        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算TP
-        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止SL過小
+        tp = float(torch.sigmoid(tp_out).item()) * bb_width * fib_weight * atr  # 根據波動率計算TP，轉為 float
+        sl = max(float(torch.sigmoid(sl_out).item()) * bb_width * fib_weight * atr, 0.002)  # 防止SL過小，轉為 float
 
         # ✅ 槓桿預測並限制在1~10倍
-        leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
+        leverage = min(max(float(torch.sigmoid(lev_out).item()) * 9 + 1, 1), 10)
 
         # ✅ 優先使用真實 reward，若無則使用模擬
         reward_val, _, _ = get_real_reward()
@@ -106,7 +106,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "tp": round(tp * 100, 2),  # ✅ 統一顯示為百分比
+        "tp": round(tp * 100, 2),  # 統一顯示為百分比
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
