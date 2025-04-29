@@ -1,1 +1,16 @@
-
+[
+  {
+    "id": "12345",
+    "timestamp": "2025-04-29T15:56:04",
+    "direction": "Long",
+    "confidence": 0.85,
+    "entry_price": 50000.0,
+    "tp": 0.02,
+    "sl": 0.015,
+    "leverage": 5,
+    "tp_price": 51000.0,
+    "sl_price": 49250.0,
+    "status": "open",
+    "rewarded": false
+  }
+]
