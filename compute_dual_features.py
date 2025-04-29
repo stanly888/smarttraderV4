@@ -37,11 +37,11 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
     fib_distances = [abs(close.iloc[-1] - level) for level in fib_levels]
     fib_mean_dist = np.mean(fib_distances)
 
-    # ✅ 計算波動指標（用ATR比例與BB寬比例）
+    # 計算波動指標（用ATR比例與BB寬比例）
     atr_pct = atr.iloc[-1] / close.iloc[-1]
     bb_pct_value = bb_width.iloc[-1] / close.iloc[-1]
 
-    # ✅ 設定 volatility_factor：波動越大，factor越大
+    # 設定 volatility_factor：波動越大，factor越大
     volatility_factor = (atr_pct + bb_pct_value) * 10  # 可以自己調倍率
     volatility_factor = np.clip(volatility_factor, 0.5, 2.0)  # 限制在0.5x～2.0x之間
 
@@ -54,10 +54,10 @@ def compute_single_features(df: pd.DataFrame) -> tuple[np.ndarray, float, float,
         fib_mean_dist
     ])
 
-    # ✅ 特徵標準化
+    # 特徵標準化
     normalized = np.nan_to_num((features - np.mean(features)) / (np.std(features) + 1e-6))
 
-    # ✅ 返回 normalized features, ATR, BB寬, Fib距離, volatility factor
+    # 返回 normalized features, ATR, BB寬, Fib距離, volatility factor
     return normalized, atr.iloc[-1], bb_width.iloc[-1], fib_mean_dist, volatility_factor
 
 def compute_dual_features(symbol="BTC-USDT") -> tuple[np.ndarray, tuple[float, float, float, float]]:
