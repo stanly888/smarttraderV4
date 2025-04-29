@@ -6,7 +6,7 @@ import os
 from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
-from reward_utils import simulate_reward  # ✅ 外部引入 simulate_reward
+from reward_utils import simulate_reward  # ✅ 引入外部 simulate_reward 函數
 
 MODEL_PATH = "dqn_model.pt"
 BUFFER_PATH = "dqn_replay.json"
@@ -14,9 +14,11 @@ TRAIN_STEPS = 20
 BATCH_SIZE = 16
 LR = 1e-3
 
+# 初始化模型與優化器
 model = DQN(input_dim=35)
 optimizer = optim.Adam(model.parameters(), lr=LR)
 
+# 載入模型與回放緩衝區
 load_model_if_exists(model, MODEL_PATH)
 print("✅ DQN 模型已載入")
 
@@ -35,20 +37,20 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         action = torch.argmax(probs, dim=-1).item()
         confidence = probs[0, action].item()
 
-        # ✅ 信心過濾：信心不夠高就直接 skip
+        # ✅ 信心過濾：信心不夠高直接選擇 Skip
         if confidence < confidence_threshold:
             action = 2  # 直接設定為 Skip
-            confidence = 1.0  # 避免亂掉
+            confidence = 1.0  # 避免影響後續計算
 
-        # ✅ 動態 TP/SL 計算，依據 fib_weight 微調
+        # ✅ 動態 TP/SL 計算，根據 fib_weight 微調
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
 
-        # ✅ 槓桿預測（限制在1~10倍）
+        # ✅ 槓桿預測並限制在1~10倍
         leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
-        # ✅ 優先取真實 reward，否則用模擬
+        # ✅ 優先使用真實 reward，若無則使用模擬
         reward_val, _, _ = get_real_reward()
         if reward_val is None:
             reward_val = simulate_reward(
@@ -61,6 +63,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
         total_reward += reward_val
 
+        # 存儲回放緩衝區
         buffer.add(
             state=x.squeeze(0).numpy(),
             action=action,
@@ -69,6 +72,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
             done=False
         )
 
+        # 回放練習
         if len(buffer) >= BATCH_SIZE:
             try:
                 states, actions, rewards, _, _ = buffer.sample(BATCH_SIZE)
@@ -91,6 +95,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
             except Exception as e:
                 print(f"⚠️ DQN 回放訓練失敗：{e}")
 
+    # 儲存模型與回放緩衝區
     save_model(model, MODEL_PATH)
     buffer.save(BUFFER_PATH)
 
@@ -100,7 +105,7 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         "model": "DQN",
         "direction": direction,
         "confidence": round(confidence, 4),
-        "tp": round(tp * 100, 2),   # ✅ 統一成百分比
+        "tp": round(tp * 100, 2),  # ✅ 統一顯示為百分比
         "sl": round(sl * 100, 2),
         "leverage": int(leverage),
         "score": round(total_reward / TRAIN_STEPS, 4),
