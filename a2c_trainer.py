@@ -1,6 +1,6 @@
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import os
 from a2c_model import ActorCritic
@@ -45,11 +45,10 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
         # ✅ 信心過濾：信心低的情況直接選擇 Skip（目前A2C二選一，保留此功能）
         if confidence < confidence_threshold:
-            # 這裡如果想更細可以自己加判斷，比如減小倉位，現在先保留直接進場但標註信心低。
+            action = torch.tensor(2)  # 設定為 Skip
+            confidence = 1.0  # 避免影響後續計算
 
-            pass  # 目前保留（A2C二分類，不進行強制改動）
-
-        # ✅ TP/SL動態調整
+        # ✅ TP/SL 動態調整
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算TP
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止SL過小
@@ -87,7 +86,7 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         loss.backward()
         optimizer.step()
 
-    # ✅ 增強回放緩衝區訓練
+    # 增強回放緩衝區訓練
     if len(replay_buffer) >= BATCH_SIZE:
         for _ in range(3):
             try:
