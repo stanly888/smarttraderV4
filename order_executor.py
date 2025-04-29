@@ -38,7 +38,7 @@ def submit_order(direction: str, tp_pct: float, sl_pct: float, leverage: float, 
         "tp_price": round(tp_price, 2),
         "sl_price": round(sl_price, 2),
         "status": "open",
-        "rewarded": False  # ✅ 預設未領取 reward
+        "rewarded": False  # 預設未領取 reward
     }
 
     trades = []
