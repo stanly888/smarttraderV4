@@ -159,7 +159,6 @@ while True:
 
             inference = sanitize_inference(inference)
 
-            # ✅ 加上推論狀態確認
             if inference.get("status") == "success" and inference.get("confidence", 0) >= CONFIDENCE_THRESHOLD:
                 logging.info(f"🚀 信心足夠，準備下單 | {inference}")
 
