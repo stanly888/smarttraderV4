@@ -1,6 +1,6 @@
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import os
 from ppo_model import UnifiedRLModel, save_model, load_model_if_exists
@@ -46,10 +46,10 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
             action = torch.tensor(1)  # 設定為 Skip
             confidence = 1.0  # 避免後續計算出錯
 
-        # ✅ 動態 TP/SL 計算，根據斐波那契加權
-        fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
-        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算 TP
-        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止 SL 太小
+        # ✅ TP/SL 動態調整
+        fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
+        tp = float(torch.sigmoid(tp_out).item()) * bb_width * fib_weight * atr  # 根據波動率計算 TP，轉為 float
+        sl = max(float(torch.sigmoid(sl_out).item()) * bb_width * fib_weight * atr, 0.002)  # 防止 SL 太小，轉為 float
 
         # ✅ 槓桿動態調整，限制在 1 到 10 倍之間
         leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
@@ -125,8 +125,8 @@ def train_ppo(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
         confidence, selected = torch.max(probs, dim=-1)
 
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)
-        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr
-        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)
+        tp = float(torch.sigmoid(tp_out).item()) * bb_width * fib_weight * atr  # 轉為 float
+        sl = max(float(torch.sigmoid(sl_out).item()) * bb_width * fib_weight * atr, 0.002)  # 轉為 float
         leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
     return {
