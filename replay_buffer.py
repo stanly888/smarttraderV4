@@ -24,14 +24,14 @@ class ReplayBuffer:
         if len(self.buffer) < batch_size:
             raise ValueError(f"ReplayBuffer 樣本不足：目前 {len(self.buffer)} 筆，需要 {batch_size} 筆")
         batch = random.sample(self.buffer, batch_size)  # 隨機取樣
-        states, actions, rewards, next_states, dones = map(np.array, zip(*batch))
+        states, actions, rewards, next_states, dones = zip(*batch)
 
         # 確保轉換為適當的數據類型
-        states = states.astype(np.float32)
-        next_states = next_states.astype(np.float32)
-        rewards = rewards.astype(np.float32)
-        actions = actions.astype(np.int64)
-        dones = dones.astype(np.bool_)
+        states = np.array(states, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        rewards = np.array(rewards, dtype=np.float32)
+        actions = np.array(actions, dtype=np.int64)
+        dones = np.array(dones, dtype=np.bool)
 
         return states, actions, rewards, next_states, dones
 
