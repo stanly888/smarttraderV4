@@ -50,6 +50,12 @@ def train_a2c(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
         # ✅ TP/SL 動態調整
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
+
+        # 確保 tp_out, sl_out, lev_out 都是 tensor 類型再使用 sigmoid
+        tp_out = torch.tensor(tp_out, dtype=torch.float32)  # 確保是 tensor 類型
+        sl_out = torch.tensor(sl_out, dtype=torch.float32)  # 確保是 tensor 類型
+        lev_out = torch.tensor(lev_out, dtype=torch.float32)  # 確保是 tensor 類型
+
         tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算TP
         sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止SL過小
 
