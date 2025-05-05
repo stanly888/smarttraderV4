@@ -11,8 +11,8 @@ class ReplayBuffer:
 
     def add(self, state, action, reward, next_state, done):
         """添加五元組（state, action, reward, next_state, done）至緩衝區"""
-        state = np.asarray(state, dtype=np.float32).flatten().tolist()  # 轉換為 1D 列表
-        next_state = np.asarray(next_state, dtype=np.float32).flatten().tolist()
+        state = np.asarray(state, dtype=np.float32).flatten()  # 轉換為 1D 列表
+        next_state = np.asarray(next_state, dtype=np.float32).flatten()
         self.buffer.append((state, action, reward, next_state, done))
 
     def push(self, state, action, reward):
@@ -31,7 +31,7 @@ class ReplayBuffer:
         next_states = np.array(next_states, dtype=np.float32)
         rewards = np.array(rewards, dtype=np.float32)
         actions = np.array(actions, dtype=np.int64)
-        dones = np.array(dones, dtype=np.bool)
+        dones = np.array(dones, dtype=np.bool_)
 
         return states, actions, rewards, next_states, dones
 
