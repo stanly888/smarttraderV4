@@ -16,6 +16,9 @@ class UnifiedRLModel(nn.Module):
         self.sl_head = nn.Linear(hidden_dim, 1)       # stop loss %
         self.lev_head = nn.Linear(hidden_dim, 1)      # leverage 倍數
 
+        # 初始化模型權重
+        self._init_weights()
+
     def forward(self, x):
         x = self.shared(x)
         logits = self.policy_head(x)
@@ -24,13 +27,23 @@ class UnifiedRLModel(nn.Module):
         sl = self.sl_head(x)
         lev = self.lev_head(x)
 
-        # 在返回數值時，使用 .item() 來轉換為純數字
-        return logits, value.item(), tp.item(), sl.item(), lev.item()
+        # 返回數值保持為 Tensor 類型，以便進行反向傳播
+        return logits, value, tp, sl, lev
 
+    def _init_weights(self):
+        """使用 Xavier 初始化方法初始化權重"""
+        for layer in self.children():
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+
+# 儲存模型
 def save_model(model, path="ppo_model.pt"):
     torch.save(model.state_dict(), path)
     print(f"✅ PPO 模型已儲存：{path}")
 
+# 載入模型
 def load_model_if_exists(model, path="ppo_model.pt"):
     if os.path.exists(path):
         model.load_state_dict(torch.load(path))
