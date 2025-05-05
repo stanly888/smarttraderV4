@@ -1,11 +1,12 @@
+import random
 import json
 import os
-from typing import Optional
+from typing import Union
 
 # 設定交易資料路徑
 TRADES_PATH = "real_trades.json"
 
-def fetch_unrewarded_trade() -> Optional[dict]:
+def fetch_unrewarded_trade() -> Union[dict, None]:
     """取得尚未領取 reward 的已結束訂單"""
     if not os.path.exists(TRADES_PATH):
         print("⚠️ 找不到交易檔案")
@@ -74,7 +75,7 @@ def compute_real_reward(trade: dict) -> tuple[float, bool, bool]:
         print(f"❌ 計算 reward 時出錯：{e}")
         return 0.0, False, False
 
-def get_real_reward() -> tuple[Optional[float], bool, bool]:
+def get_real_reward() -> tuple[Union[float, None], bool, bool]:
     """獲取尚未處理的 reward（如果有）"""
     trade = fetch_unrewarded_trade()
     if trade is None:
