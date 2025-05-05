@@ -1,10 +1,9 @@
-# a2c_model.py
 import torch
 import torch.nn as nn
 import os
 
 class ActorCritic(nn.Module):
-    def __init__(self, input_dim: int = 33, hidden_dim: int = 64, action_dim: int = 2):  # ✅ input_dim=33
+    def __init__(self, input_dim: int = 33, hidden_dim: int = 64, action_dim: int = 2):  # input_dim=33
         super(ActorCritic, self).__init__()
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -18,6 +17,9 @@ class ActorCritic(nn.Module):
         self.sl_head = nn.Linear(hidden_dim, 1)         # 預測 SL 百分比
         self.lev_head = nn.Linear(hidden_dim, 1)        # 槓桿預測（連續）
 
+        # 初始化權重（例如 Xavier 初始化）
+        self._init_weights()
+
     def forward(self, x):
         shared_out = self.shared(x)
         logits = self.actor(shared_out)
@@ -26,18 +28,31 @@ class ActorCritic(nn.Module):
         sl_out = self.sl_head(shared_out)
         lev_out = self.lev_head(shared_out)
 
-        # 在這裡返回時將其轉換為 Python 基本數據類型（使用 .item()）
-        return logits, value.item(), tp_out.item(), sl_out.item(), lev_out.item()
+        return logits, value, tp_out, sl_out, lev_out
 
-# ✅ 儲存模型
+    def _init_weights(self):
+        # 使用 Xavier 初始化權重
+        for layer in self.shared:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
+
+# 儲存模型
 def save_model(model, path="a2c_model.pt"):
-    torch.save(model.state_dict(), path)
-    print(f"✅ 模型已儲存：{path}")
+    try:
+        torch.save(model.state_dict(), path)
+        print(f"✅ 模型已儲存：{path}")
+    except Exception as e:
+        print(f"❌ 儲存模型時出錯：{e}")
 
-# ✅ 載入模型
+# 載入模型
 def load_model_if_exists(model, path="a2c_model.pt"):
     if os.path.exists(path):
-        model.load_state_dict(torch.load(path))
-        print(f"✅ 模型已載入：{path}")
+        try:
+            model.load_state_dict(torch.load(path))
+            print(f"✅ 模型已載入：{path}")
+        except Exception as e:
+            print(f"❌ 載入模型時出錯：{e}")
     else:
         print("⚠️ 未找到 A2C 模型檔案，將使用未訓練的初始化模型")
