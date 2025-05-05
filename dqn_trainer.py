@@ -6,7 +6,7 @@ import os
 from dqn_model import DQN, save_model, load_model_if_exists
 from replay_buffer import ReplayBuffer
 from reward_fetcher import get_real_reward
-from reward_utils import simulate_reward  # ✅ 引入外部 simulate_reward 函數
+from reward_utils import simulate_reward  # 引入外部 simulate_reward 函數
 
 MODEL_PATH = "dqn_model.pt"
 BUFFER_PATH = "dqn_replay.json"
@@ -45,11 +45,17 @@ def train_dqn(features: np.ndarray, atr: float, bb_width: float, fib_distance: f
 
         # ✅ 動態 TP/SL 計算，根據 fib_weight 微調
         fib_weight = max(1 - abs(fib_distance - 0.618), 0.2)  # 根據斐波那契進行加權
-        tp = float(torch.sigmoid(tp_out).item()) * bb_width * fib_weight * atr  # 根據波動率計算TP，轉為 float
-        sl = max(float(torch.sigmoid(sl_out).item()) * bb_width * fib_weight * atr, 0.002)  # 防止SL過小，轉為 float
+        
+        # 確保 tp_out, sl_out, lev_out 都是 tensor 類型再使用 sigmoid
+        tp_out = torch.tensor(tp_out, dtype=torch.float32)  # 確保是 tensor 類型
+        sl_out = torch.tensor(sl_out, dtype=torch.float32)  # 確保是 tensor 類型
+        lev_out = torch.tensor(lev_out, dtype=torch.float32)  # 確保是 tensor 類型
+
+        tp = torch.sigmoid(tp_out).item() * bb_width * fib_weight * atr  # 根據波動率計算TP，轉為 float
+        sl = max(torch.sigmoid(sl_out).item() * bb_width * fib_weight * atr, 0.002)  # 防止SL過小，轉為 float
 
         # ✅ 槓桿預測並限制在1~10倍
-        leverage = min(max(float(torch.sigmoid(lev_out).item()) * 9 + 1, 1), 10)
+        leverage = min(max(torch.sigmoid(lev_out).item() * 9 + 1, 1), 10)
 
         # ✅ 優先使用真實 reward，若無則使用模擬
         reward_val, _, _ = get_real_reward()
