@@ -16,14 +16,14 @@ def train_model(features=None, atr=None, bb_width=None, fib_distance=None, volat
     
     # 計算特徵資料
     try:
-        if not all([features, atr, bb_width, fib_distance, volatility_factor]):
+        if any(v is None for v in [features, atr, bb_width, fib_distance, volatility_factor]):
             features, (atr, bb_width, fib_distance, volatility_factor) = compute_dual_features("BTC-USDT")
     except Exception as e:
         print(f"❌ 無法取得實盤資料或計算特徵：{e}")
         return {"status": "error", "message": str(e)}
 
     # 檢查特徵資料有效性
-    if not features or not features.any():
+    if features is None or features.size == 0:
         print("⚠️ 特徵資料異常，略過此次訓練")
         return {"status": "error", "message": "技術指標無效"}
 
@@ -37,11 +37,11 @@ def train_model(features=None, atr=None, bb_width=None, fib_distance=None, volat
         return {"status": "error", "message": f"訓練失敗：{str(e)}"}
 
     # 選擇得分最高的模型
-    best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"])
+    best = max([result_ppo, result_a2c, result_dqn], key=lambda x: x["score"] if "score" in x else -float("inf"))
 
     # 檢查結果完整性
     if "model" not in best or "confidence" not in best or "score" not in best:
-        return {"status": "error", "message": "模型結果不完整", "raw": best}
+        return {"status": "error", "message": "模型結果不完整"}
 
     # 記錄成功的 retrain 結果
     record_retrain_status(best["model"], best["score"], best["confidence"])
