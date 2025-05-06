@@ -19,6 +19,9 @@ class DQN(nn.Module):
         self._init_weights()
 
     def forward(self, x):
+        # 確保輸入的形狀是正確的，展平輸入張量
+        x = x.view(x.size(0), -1)  # 展平為 (batch_size, input_dim)
+        
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         direction_logits = self.direction_head(x)
@@ -26,7 +29,7 @@ class DQN(nn.Module):
         sl_out = self.sl_head(x)
         lev_out = self.lev_head(x)
 
-        # 返回 Tensor 類型的輸出，不要使用 .item()，保留梯度信息
+        # 返回 Tensor 類型的輸出，不使用 .item()，保留梯度信息
         return direction_logits, tp_out, sl_out, lev_out
 
     def _init_weights(self):
