@@ -21,6 +21,8 @@ class ActorCritic(nn.Module):
         self._init_weights()
 
     def forward(self, x):
+        # 確保輸入是正確的形狀，展平為 (batch_size, input_dim)
+        x = x.view(x.size(0), -1)
         shared_out = self.shared(x)
         logits = self.actor(shared_out)
         value = self.critic(shared_out)
