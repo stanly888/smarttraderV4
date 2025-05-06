@@ -20,6 +20,9 @@ class UnifiedRLModel(nn.Module):
         self._init_weights()
 
     def forward(self, x):
+        # 檢查並展平輸入 x（如果是多維的）
+        x = x.view(x.size(0), -1)  # 展平為 (batch_size, input_dim)
+        
         x = self.shared(x)
         logits = self.policy_head(x)
         value = self.value_head(x)
@@ -40,13 +43,19 @@ class UnifiedRLModel(nn.Module):
 
 # 儲存模型
 def save_model(model, path="ppo_model.pt"):
-    torch.save(model.state_dict(), path)
-    print(f"✅ PPO 模型已儲存：{path}")
+    try:
+        torch.save(model.state_dict(), path)
+        print(f"✅ PPO 模型已儲存：{path}")
+    except Exception as e:
+        print(f"❌ 儲存模型時出錯：{e}")
 
 # 載入模型
 def load_model_if_exists(model, path="ppo_model.pt"):
     if os.path.exists(path):
-        model.load_state_dict(torch.load(path))
-        print(f"✅ PPO 模型已載入：{path}")
+        try:
+            model.load_state_dict(torch.load(path))
+            print(f"✅ PPO 模型已載入：{path}")
+        except Exception as e:
+            print(f"❌ 載入模型時出錯：{e}")
     else:
         print("⚠️ 未找到 PPO 模型檔案，使用未訓練參數")
